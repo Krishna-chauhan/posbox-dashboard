@@ -17,6 +17,9 @@ const ElectionsPage = React.lazy(() =>
 const ElectionDetails = React.lazy(() =>
   import(/* webpackChunkName: "election-details" */ './elections/ElectionDetails')
 );
+const VoterManagement = React.lazy(() =>
+  import(/* webpackChunkName: "voter-management" */ './elections/VoterManagement')
+);
 const PollingStationsPage = React.lazy(() =>
   import(/* webpackChunkName: "polling-stations" */ './polling-stations/PollingStationsPage')
 );
@@ -58,6 +61,10 @@ const App = ({ match }) => {
               path={`${match.url}/elections`}
               exact
               render={(props) => <ElectionsPage {...props} />}
+            />
+            <Route
+              path={`${match.url}/elections/:id/voters`}
+              render={(props) => <VoterManagement {...props} />}
             />
             <Route
               path={`${match.url}/elections/:id`}

@@ -29,7 +29,7 @@ export const firebaseConfig = {
 
 export const currentUser = {
   id: 1,
-  title: 'Sarah Kortney',
+  title: 'Admin',
   img: '/assets/img/profiles/l-1.jpg',
   date: 'Last seen today 15:24',
   role: UserRole.Admin,
@@ -46,7 +46,7 @@ export const defaultColor = 'light.purplemonster';
 export const isDarkSwitchActive = true;
 export const defaultDirection = 'ltr';
 export const themeRadiusStorageKey = '__theme_radius';
-export const isAuthGuardActive = true;
+export const isAuthGuardActive = false;
 export const colors = [
   'bluenavy',
   'blueyale',

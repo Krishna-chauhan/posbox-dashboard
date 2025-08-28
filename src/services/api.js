@@ -1,10 +1,12 @@
 // API service for FastAPI backend integration
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+const PROJECT_NAME = process.env.REACT_APP_PROJECT_NAME || 'POSBOX';
 
 class ApiService {
   constructor() {
     this.baseURL = API_BASE_URL;
+    this.projectName = PROJECT_NAME;
   }
 
   // Get auth token from localStorage
@@ -15,7 +17,7 @@ class ApiService {
     // If not found, try to get from user data
     if (!token) {
       try {
-        const userData = localStorage.getItem('gogo_current_user');
+        const userData = localStorage.getItem(`${this.projectName.toLowerCase()}_current_user`);
         if (userData) {
           const user = JSON.parse(userData);
           token = user.token;
@@ -31,7 +33,7 @@ class ApiService {
 
   logout() {
     localStorage.removeItem('token');
-    localStorage.removeItem('gogo_current_user');
+    localStorage.removeItem(`${this.projectName.toLowerCase()}_current_user`);
     window.location.href = '/user/login';
   }
 
@@ -283,6 +285,65 @@ class ApiService {
     return response;
   }
 
+  // Voter Management
+  async getElectionVoters(electionId, skip = 0, limit = 100) {
+    const response = await this.request(`/api/admin/elections/${electionId}/voters?skip=${skip}&limit=${limit}`);
+    console.log('Raw API response:', response);
+    
+    // Handle the nested data structure from the API
+    if (response && response.data && response.data.voters) {
+      console.log('Extracting voters from response.data.voters');
+      return response.data.voters;
+    } else if (response && response.voters) {
+      console.log('Extracting voters from response.voters');
+      return response.voters;
+    } else if (Array.isArray(response)) {
+      console.log('Response is already an array');
+      return response;
+    } else {
+      console.log('Unexpected response structure:', response);
+      return [];
+    }
+  }
+
+  async uploadVoterExcel(file, electionId) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('election_id', electionId);
+
+    const token = this.getAuthToken();
+    
+    const config = {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    };
+
+    try {
+      console.log(`Uploading voter Excel for election: ${electionId}`);
+      
+      const response = await fetch(`${this.baseURL}/api/admin/excel-upload/voters`, config);
+      
+      console.log('Upload response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Upload Error:', errorData);
+        throw new Error(errorData.detail || errorData.message || `Upload failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Upload response data:', data);
+      return data;
+    } catch (error) {
+      console.error('Voter upload failed:', error);
+      throw error;
+    }
+  }
+
   async getPollingStationById(id) {
     return this.request(`/api/admin/polling-stations/${id}`);
   }
@@ -384,15 +445,15 @@ class ApiService {
 
   // User Dashboard API methods
   async getActiveElections() {
-    return this.request('/api/elections/active');
+    return this.request('/api/admin/elections/active');
   }
 
   async getElectionVoters(electionId) {
-    return this.request(`/api/elections/${electionId}/voters`);
+    return this.request(`/api/admin/elections/${electionId}/voters`);
   }
 
   async getElectionStats(electionId) {
-    return this.request(`/api/elections/${electionId}/stats`);
+    return this.request(`/api/admin/elections/${electionId}/stats`);
   }
 
   async getUserProfile() {

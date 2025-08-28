@@ -37,7 +37,7 @@ Tabla de Contenido
 
 module.exports = {
   /* 01.General */
-  'general.copyright': 'Gogo React © Todos los derechos reservados.',
+  'general.copyright': '© 2025 Todos los derechos reservados.',
   'unauthorized.title': 'Unauthorized Access Attempt',
   'unauthorized.detail':
     'You are not authorized to view the page you are trying to access.',

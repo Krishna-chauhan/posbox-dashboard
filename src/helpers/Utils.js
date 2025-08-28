@@ -151,9 +151,11 @@ export const setCurrentLanguage = (locale) => {
 export const getCurrentUser = () => {
   let user = null;
   try {
+    const projectName = process.env.REACT_APP_PROJECT_NAME || 'POSBOX';
+    const userKey = `${projectName.toLowerCase()}_current_user`;
     user =
-      localStorage.getItem('gogo_current_user') != null
-        ? JSON.parse(localStorage.getItem('gogo_current_user'))
+      localStorage.getItem(userKey) != null
+        ? JSON.parse(localStorage.getItem(userKey))
         : null;
   } catch (error) {
     console.log('>>>>: src/helpers/Utils.js  : getCurrentUser -> error', error);
@@ -164,10 +166,12 @@ export const getCurrentUser = () => {
 
 export const setCurrentUser = (user) => {
   try {
+    const projectName = process.env.REACT_APP_PROJECT_NAME || 'POSBOX';
+    const userKey = `${projectName.toLowerCase()}_current_user`;
     if (user) {
-      localStorage.setItem('gogo_current_user', JSON.stringify(user));
+      localStorage.setItem(userKey, JSON.stringify(user));
     } else {
-      localStorage.removeItem('gogo_current_user');
+      localStorage.removeItem(userKey);
     }
   } catch (error) {
     console.log('>>>>: src/helpers/Utils.js : setCurrentUser -> error', error);

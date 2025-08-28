@@ -520,7 +520,7 @@ const ElectionsPage = () => {
                         currentElections.map((election) => (
                           <tr key={election.id}>
                             <td>
-                              <small className="text-muted">{election.election_id}</small>
+                              <small className="text-muted">{election.id}</small>
                             </td>
                             <td>
                               <strong>{election.name}</strong>
@@ -536,25 +536,33 @@ const ElectionsPage = () => {
                             <td>
                               <small>{new Date(election.created_at).toLocaleDateString()}</small>
                             </td>
-                            <td>
-                              <div className="btn-group" role="group">
-                                <Button
-                                  color="info"
-                                  size="sm"
-                                  onClick={() => handleEditElection(election)}
-                                  className="mr-1"
-                                >
-                                  Edit
-                                </Button>
-                                <Button
-                                  color="danger"
-                                  size="sm"
-                                  onClick={() => handleDeleteElection(election.id)}
-                                >
-                                  Delete
-                                </Button>
-                              </div>
-                            </td>
+                                                         <td>
+                               <div className="btn-group" role="group">
+                                 <Button
+                                   color="success"
+                                   size="sm"
+                                   onClick={() => window.location.href = `/app/elections/${election.id}/voters`}
+                                   className="mr-1"
+                                 >
+                                   Voters
+                                 </Button>
+                                 <Button
+                                   color="info"
+                                   size="sm"
+                                   onClick={() => handleEditElection(election)}
+                                   className="mr-1"
+                                 >
+                                   Edit
+                                 </Button>
+                                 <Button
+                                   color="danger"
+                                   size="sm"
+                                   onClick={() => handleDeleteElection(election.id)}
+                                 >
+                                   Delete
+                                 </Button>
+                               </div>
+                             </td>
                           </tr>
                         ))
                       ) : (
