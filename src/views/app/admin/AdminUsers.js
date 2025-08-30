@@ -10,6 +10,7 @@ const AdminUsers = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [modalError, setModalError] = useState('');
   const [userForm, setUserForm] = useState({
     firstName: '',
     lastName: '',
@@ -98,6 +99,7 @@ const AdminUsers = () => {
       pollingStation: '',
       voterStatus: 'registered'
     });
+    setModalError('');
     setModalOpen(true);
   };
 
@@ -124,14 +126,34 @@ const AdminUsers = () => {
       if (editingUser) {
         await apiService.updateUser(editingUser.id, userForm);
         setMessage({ type: 'success', text: 'User updated successfully' });
+        setModalOpen(false);
+        loadUsers();
       } else {
         await apiService.createUser(userForm);
         setMessage({ type: 'success', text: 'User created successfully' });
+        setModalOpen(false);
+        loadUsers();
       }
-      setModalOpen(false);
-      loadUsers();
     } catch (error) {
-      setMessage({ type: 'danger', text: 'Failed to save user' });
+      console.error('User save error:', error);
+      let errorMessage = 'Failed to save user';
+      
+      // Try to extract error message from different response formats
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setModalError(errorMessage);
+      // Keep modal open on error so user can fix the details
     } finally {
       setLoading(false);
     }
@@ -278,6 +300,11 @@ const AdminUsers = () => {
           {editingUser ? 'Edit User' : 'Create User'}
         </ModalHeader>
         <ModalBody>
+          {modalError && (
+            <Alert color="danger" className="mb-3">
+              {modalError}
+            </Alert>
+          )}
           <Form>
             <Row>
               <Colxx xxs="12" md="6">

@@ -87,7 +87,7 @@ function* loginWithEmailPassword({ payload }) {
       
       setCurrentUser(item);
       yield put(loginUserSuccess(item));
-      history.push(adminRoot);
+      history.push(`${adminRoot}/admin-dashboard`);
     }
   } catch (error) {
     console.error('Login error:', error);

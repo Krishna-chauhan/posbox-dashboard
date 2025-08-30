@@ -37,7 +37,7 @@ Table of Contents
 
 module.exports = {
   /* 01.General */
-  'general.copyright': '© 2025 All Rights Reserved.',
+  'general.copyright': 'pobox©2025 All Rights Reserved.',
 
   'unauthorized.title': 'Unauthorized Access Attempt',
   'unauthorized.detail':

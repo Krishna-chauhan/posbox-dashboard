@@ -196,6 +196,7 @@ class ApiService {
     return this.request('/dashboard/stats');
   }
 
+  // Legacy user methods - keeping for backward compatibility
   async getUsers() {
     return this.request('/users');
   }
@@ -371,11 +372,22 @@ class ApiService {
   // Users Management
   async getUsers(skip = 0, limit = 100) {
     const response = await this.request(`/api/admin/users/?skip=${skip}&limit=${limit}`);
+    console.log('Raw users API response:', response);
+    
     // Handle the nested data structure from the API
     if (response && response.data && response.data.users) {
+      console.log('Extracting users from response.data.users');
       return response.data.users;
+    } else if (response && response.users) {
+      console.log('Extracting users from response.users');
+      return response.users;
+    } else if (Array.isArray(response)) {
+      console.log('Response is already an array');
+      return response;
+    } else {
+      console.log('Unexpected response structure:', response);
+      return [];
     }
-    return response;
   }
 
   async getUserById(id) {
@@ -383,10 +395,44 @@ class ApiService {
   }
 
   async createUser(userData) {
-    return this.request('/api/admin/users', {
+    return this.request('/api/admin/users/', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+  }
+
+  async createUserFormData(formData) {
+    const token = this.getAuthToken();
+    
+    const config = {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    };
+
+    try {
+      console.log('Creating user with FormData');
+      
+      const response = await fetch(`${this.baseURL}/api/admin/users/`, config);
+      
+      console.log('Create user response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Create User Error:', errorData);
+        throw new Error(errorData.detail || errorData.message || `Create user failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Create user response data:', data);
+      return data;
+    } catch (error) {
+      console.error('Create user failed:', error);
+      throw error;
+    }
   }
 
   async updateUser(id, userData) {
@@ -399,6 +445,22 @@ class ApiService {
   async deleteUser(id) {
     return this.request(`/api/admin/users/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async generateUserId() {
+    return this.request('/api/admin/users/generate-id');
+  }
+
+  async activateUser(userId) {
+    return this.request(`/api/admin/users/${userId}/activate`, {
+      method: 'PATCH',
+    });
+  }
+
+  async deactivateUser(userId) {
+    return this.request(`/api/admin/users/${userId}/deactivate`, {
+      method: 'PATCH',
     });
   }
 

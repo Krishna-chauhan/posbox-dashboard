@@ -39,17 +39,24 @@ const UserDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [usersPerPage] = useState(10);
   const [userForm, setUserForm] = useState({
+    user_id: '',
     first_name: '',
     last_name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    mobile: '',
+    email: null,
+    password: null,
+    confirmPassword: null,
+    mobile: null,
+    party_logo: null,
+    party_name: '',
+    footer_content: '',
     is_active: true
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+  const [modalError, setModalError] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
 
   useEffect(() => {
     loadUsers();
@@ -84,30 +91,42 @@ const UserDashboard = () => {
       setUsers([
         {
           id: 1,
+          user_id: 'USR001',
           first_name: 'John',
           last_name: 'Doe',
           email: 'john.doe@example.com',
           mobile: '+1-555-0123',
+          party_name: 'Bharatiya Janata Party',
+          party_logo: 'https://via.placeholder.com/50x50/FF6B6B/FFFFFF?text=BJP',
+          footer_content: 'भारतीय जनता पार्टी - राष्ट्र के लिए समर्पित',
           is_active: true,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z'
         },
         {
           id: 2,
+          user_id: 'USR002',
           first_name: 'Jane',
           last_name: 'Smith',
           email: 'jane.smith@example.com',
           mobile: '+1-555-0456',
+          party_name: 'Indian National Congress',
+          party_logo: 'https://via.placeholder.com/50x50/4ECDC4/FFFFFF?text=INC',
+          footer_content: 'भारतीय राष्ट्रीय कांग्रेस - जनता की आवाज',
           is_active: true,
           created_at: '2024-01-02T00:00:00Z',
           updated_at: '2024-01-02T00:00:00Z'
         },
         {
           id: 3,
+          user_id: 'USR003',
           first_name: 'Mike',
           last_name: 'Johnson',
           email: 'mike.johnson@example.com',
           mobile: '+1-555-0789',
+          party_name: 'Aam Aadmi Party',
+          party_logo: 'https://via.placeholder.com/50x50/45B7D1/FFFFFF?text=AAP',
+          footer_content: 'आम आदमी पार्टी - साफ राजनीति',
           is_active: false,
           created_at: '2024-01-03T00:00:00Z',
           updated_at: '2024-01-03T00:00:00Z'
@@ -126,43 +145,62 @@ const UserDashboard = () => {
         user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.mobile?.toLowerCase().includes(searchTerm.toLowerCase())
+        user.mobile?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.party_name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredUsers(filtered);
     }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     setEditingUser(null);
-    setUserForm({
+    const newForm = {
+      user_id: '',
       first_name: '',
       last_name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      mobile: '',
+      email: null,
+      password: null,
+      confirmPassword: null,
+      mobile: null,
+      party_logo: null,
+      party_name: '',
+      footer_content: '',
       is_active: true
-    });
+    };
+    setUserForm(newForm);
     setShowPassword(false);
     setShowConfirmPassword(false);
     setPasswordError('');
+    setModalError('');
+    setSelectedFile(null);
+    setFilePreview(null);
     setModalOpen(true);
+    
+    // Generate user ID when opening the modal
+    await generateUserId();
   };
 
   const handleEditUser = (user) => {
     setEditingUser(user);
     setUserForm({
+      user_id: user.user_id || user.id || '',
       first_name: user.first_name || '',
       last_name: user.last_name || '',
-      email: user.email || '',
-      password: '',
-      confirmPassword: '',
-      mobile: user.mobile || '',
+      email: user.email || null,
+      password: null,
+      confirmPassword: null,
+      mobile: user.mobile || null,
+      party_logo: user.party_logo || null,
+      party_name: user.party_name || '',
+      footer_content: user.footer_content || '',
       is_active: user.is_active !== undefined ? user.is_active : true
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
     setPasswordError('');
+    setModalError('');
+    setSelectedFile(null);
+    setFilePreview(null);
     setModalOpen(true);
   };
 
@@ -175,55 +213,174 @@ const UserDashboard = () => {
     try {
       setLoading(true);
       
-      // Prepare user data - only include password if it's provided
-      const userData = {
-        first_name: userForm.first_name,
-        last_name: userForm.last_name,
-        email: userForm.email,
-        mobile: userForm.mobile,
-        is_active: userForm.is_active
-      };
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      // Add user data to FormData
+      formData.append('user_id', userForm.user_id?.trim() || '');
+      formData.append('first_name', userForm.first_name?.trim() || '');
+      formData.append('last_name', userForm.last_name?.trim() || '');
+      formData.append('email', userForm.email?.trim() || '');
+      formData.append('mobile', userForm.mobile?.trim() || '');
+      formData.append('party_name', userForm.party_name?.trim() || '');
+      formData.append('footer_content', userForm.footer_content?.trim() || '');
+      formData.append('is_active', userForm.is_active);
+      
+      // Handle password - only add if provided
+      if (userForm.password && userForm.password.trim() !== '') {
+        formData.append('password', userForm.password.trim());
+      }
 
-      // Only include password if it's provided (for new users or password updates)
-      if (userForm.password) {
-        userData.password = userForm.password;
+      // Handle file upload for party logo
+      if (userForm.party_logo && userForm.party_logo instanceof File) {
+        formData.append('party_logo', userForm.party_logo);
       }
 
       if (editingUser) {
+        // For editing, we'll still use JSON for now (no file upload in edit)
+        const userData = {
+          user_id: userForm.user_id?.trim() || null,
+          first_name: userForm.first_name?.trim() || null,
+          last_name: userForm.last_name?.trim() || null,
+          email: userForm.email?.trim() || null,
+          mobile: userForm.mobile?.trim() || null,
+          party_name: userForm.party_name?.trim() || null,
+          footer_content: userForm.footer_content?.trim() || null,
+          is_active: userForm.is_active
+        };
+
+        // Convert empty strings to null for all fields
+        Object.keys(userData).forEach(key => {
+          if (userData[key] === '' || userData[key] === null || userData[key] === undefined) {
+            userData[key] = null;
+          }
+        });
+
+        // Handle password for edit
+        if (userForm.password && userForm.password.trim() !== '') {
+          userData.password = userForm.password.trim();
+        } else {
+          userData.password = null;
+        }
+
         await apiService.updateUser(editingUser.id, userData);
         setMessage({ type: 'success', text: 'User updated successfully' });
+        setModalOpen(false);
+        loadUsers();
       } else {
-        await apiService.createUser(userData);
+        // For new users, use FormData
+        await apiService.createUserFormData(formData);
         setMessage({ type: 'success', text: 'User created successfully' });
+        setModalOpen(false);
+        loadUsers();
       }
-      setModalOpen(false);
-      loadUsers();
     } catch (error) {
-      setMessage({ type: 'danger', text: 'Failed to save user' });
+      console.error('User save error:', error);
+      let errorMessage = 'Failed to save user';
+      
+      // Try to extract error message from different response formats
+      if (error.response && error.response.data) {
+        const errorData = error.response.data;
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setModalError(errorMessage);
+      // Keep modal open on error so user can fix the details
     } finally {
       setLoading(false);
     }
   };
 
   const handleToggleStatus = async (user) => {
-    try {
-      const newStatus = !user.is_active;
-      await apiService.updateUser(user.id, { ...user, is_active: newStatus });
-      setMessage({ type: 'success', text: `User status updated to ${newStatus ? 'active' : 'inactive'}` });
-      loadUsers();
-    } catch (error) {
-      setMessage({ type: 'danger', text: 'Failed to update user status' });
+    const action = user.is_active ? 'deactivate' : 'activate';
+    const userName = `${user.first_name} ${user.last_name}`;
+    
+    if (window.confirm(`Are you sure you want to ${action} user "${userName}"?`)) {
+      try {
+        setLoading(true);
+        
+        try {
+          // Try specific activate/deactivate endpoints first
+          if (user.is_active) {
+            // Deactivate user
+            await apiService.deactivateUser(user.id);
+            setMessage({ type: 'success', text: `User "${userName}" has been deactivated successfully` });
+          } else {
+            // Activate user
+            await apiService.activateUser(user.id);
+            setMessage({ type: 'success', text: `User "${userName}" has been activated successfully` });
+          }
+        } catch (specificError) {
+          console.log('Specific activate/deactivate endpoints not available, falling back to update method');
+          
+          // Fallback to update method
+          const newStatus = !user.is_active;
+          await apiService.updateUser(user.id, { ...user, is_active: newStatus });
+          setMessage({ type: 'success', text: `User "${userName}" status updated to ${newStatus ? 'active' : 'inactive'}` });
+        }
+        
+        loadUsers();
+      } catch (error) {
+        console.error(`${action} user error:`, error);
+        let errorMessage = `Failed to ${action} user`;
+        
+        // Try to extract error message from different response formats
+        if (error.response && error.response.data) {
+          const errorData = error.response.data;
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        setMessage({ type: 'danger', text: errorMessage });
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+  const handleDeleteUser = async (userId, userName) => {
+    if (window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
       try {
+        setLoading(true);
         await apiService.deleteUser(userId);
         setMessage({ type: 'success', text: 'User deleted successfully' });
         loadUsers();
       } catch (error) {
-        setMessage({ type: 'danger', text: 'Failed to delete user' });
+        console.error('Delete user error:', error);
+        let errorMessage = 'Failed to delete user';
+        
+        // Try to extract error message from different response formats
+        if (error.response && error.response.data) {
+          const errorData = error.response.data;
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        setMessage({ type: 'danger', text: errorMessage });
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -253,21 +410,100 @@ const UserDashboard = () => {
     for (let i = 0; i < length; i++) {
       password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
-    setUserForm({ ...userForm, password, confirmPassword: password });
+    setUserForm({ ...userForm, password: password, confirmPassword: password });
     setPasswordError('');
   };
 
   const validatePasswords = () => {
+    // If both passwords are null or empty, that's valid (optional password)
+    if (!userForm.password && !userForm.confirmPassword) {
+      setPasswordError('');
+      return true;
+    }
+    
+    // If one password is provided but not the other, that's invalid
+    if (!userForm.password || !userForm.confirmPassword) {
+      setPasswordError('Both password fields must be filled');
+      return false;
+    }
+    
+    // Check if passwords match
     if (userForm.password !== userForm.confirmPassword) {
       setPasswordError('Passwords do not match');
       return false;
     }
+    
+    // Check password length
     if (userForm.password.length < 8) {
       setPasswordError('Password must be at least 8 characters long');
       return false;
     }
+    
     setPasswordError('');
     return true;
+  };
+
+  const generateUserId = async () => {
+    try {
+      // Try to get user ID from API first
+      const response = await apiService.generateUserId();
+      const generatedUserId = response.user_id || response.id;
+      
+      if (generatedUserId) {
+        setUserForm({ ...userForm, user_id: generatedUserId });
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to generate user ID from API:', error);
+    }
+    
+    // Fallback to client-side generation
+    try {
+      const timestamp = Date.now().toString().slice(-6);
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const generatedUserId = `USR${timestamp}${random}`;
+      setUserForm({ ...userForm, user_id: generatedUserId });
+    } catch (error) {
+      console.error('Failed to generate user ID:', error);
+      setModalError('Failed to generate User ID. Please try again.');
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        setModalError('Please select a valid image file (JPEG, PNG, or GIF)');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        setModalError('File size must be less than 5MB');
+        return;
+      }
+      
+      setSelectedFile(file);
+      setUserForm({ ...userForm, party_logo: file });
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setFilePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+      
+      setModalError(''); // Clear any previous errors
+    }
+  };
+
+  const removeFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    setUserForm({ ...userForm, party_logo: null });
   };
 
   // Pagination logic
@@ -405,26 +641,66 @@ const UserDashboard = () => {
               ) : (
                 <div className="table-responsive">
                   <Table striped hover>
-                                         <thead>
-                       <tr>
-                         <th>Name</th>
-                         <th>Email</th>
-                         <th>Mobile</th>
-                         <th>Status</th>
-                         <th>Created At</th>
-                         <th>Updated At</th>
-                         <th>Actions</th>
-                       </tr>
-                     </thead>
+                                                             <thead>
+                      <tr>
+                        <th>User ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Mobile</th>
+                        <th>Party Logo</th>
+                        <th>Party Name</th>
+                        <th>Status</th>
+                        <th>Created At</th>
+                        <th>Updated At</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
                                          <tbody>
                        {currentUsers.length > 0 ? (
                          currentUsers.map((user) => (
                            <tr key={user.id}>
                              <td>
+                               <strong>{user.user_id || user.id}</strong>
+                             </td>
+                             <td>
                                <strong>{user.first_name} {user.last_name}</strong>
                              </td>
                              <td>{user.email}</td>
                              <td>{user.mobile}</td>
+                             <td>
+                               {user.party_logo ? (
+                                 <img 
+                                   src={user.party_logo} 
+                                   alt="Party Logo" 
+                                   style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
+                                   onError={(e) => {
+                                     e.target.style.display = 'none';
+                                     e.target.nextSibling.style.display = 'inline';
+                                   }}
+                                 />
+                               ) : (
+                                 <div 
+                                   style={{ 
+                                     width: '40px', 
+                                     height: '40px', 
+                                     borderRadius: '50%', 
+                                     backgroundColor: '#f8f9fa', 
+                                     display: 'flex', 
+                                     alignItems: 'center', 
+                                     justifyContent: 'center',
+                                     fontSize: '12px',
+                                     color: '#6c757d'
+                                   }}
+                                 >
+                                   No Logo
+                                 </div>
+                               )}
+                             </td>
+                             <td>
+                               <span className="text-primary font-weight-bold">
+                                 {user.party_name || 'No Party'}
+                               </span>
+                             </td>
                              <td>{getStatusBadge(user.is_active ? 'active' : 'inactive')}</td>
                              <td>
                                <small>{new Date(user.created_at).toLocaleDateString()}</small>
@@ -453,7 +729,7 @@ const UserDashboard = () => {
                                  <Button
                                    color="danger"
                                    size="sm"
-                                   onClick={() => handleDeleteUser(user.id)}
+                                   onClick={() => handleDeleteUser(user.id, `${user.first_name} ${user.last_name}`)}
                                  >
                                    Delete
                                  </Button>
@@ -463,7 +739,7 @@ const UserDashboard = () => {
                          ))
                                              ) : (
                          <tr>
-                           <td colSpan="7" className="text-center py-4">
+                           <td colSpan="10" className="text-center py-4">
                              {searchTerm ? 'No users found matching your search.' : 'No users available.'}
                            </td>
                          </tr>
@@ -533,18 +809,65 @@ const UserDashboard = () => {
           {editingUser ? 'Edit User' : 'Add New User'}
         </ModalHeader>
         <ModalBody>
+          {modalError && (
+            <Alert color="danger" className="mb-3">
+              {modalError}
+            </Alert>
+          )}
           <Form>
-                         <Row>
-               <Colxx xxs="12" md="6">
-                 <FormGroup>
-                   <Label>First Name *</Label>
-                   <Input
-                     value={userForm.first_name}
-                     onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
-                     required
-                   />
-                 </FormGroup>
-               </Colxx>
+            <Row>
+              <Colxx xxs="12" md="6">
+                <FormGroup>
+                  <Label>User ID</Label>
+                  <InputGroup>
+                    <Input
+                      value={userForm.user_id}
+                      disabled
+                      placeholder="Auto-generated"
+                    />
+                    {!editingUser && (
+                      <InputGroupAddon addonType="append">
+                        <Button
+                          type="button"
+                          color="secondary"
+                          onClick={generateUserId}
+                          title="Generate new User ID"
+                        >
+                          <i className="simple-icon-refresh"></i>
+                        </Button>
+                      </InputGroupAddon>
+                    )}
+                  </InputGroup>
+                  <small className="text-muted">
+                    {editingUser ? 'User ID cannot be changed' : 'Click refresh to generate new ID'}
+                  </small>
+                </FormGroup>
+              </Colxx>
+              <Colxx xxs="12" md="6">
+                <FormGroup>
+                  <Label>Status</Label>
+                  <Input
+                    type="select"
+                    value={userForm.is_active}
+                    onChange={(e) => setUserForm({ ...userForm, is_active: e.target.value === 'true' })}
+                  >
+                    <option value={true}>Active</option>
+                    <option value={false}>Inactive</option>
+                  </Input>
+                </FormGroup>
+              </Colxx>
+            </Row>
+            <Row>
+              <Colxx xxs="12" md="6">
+                <FormGroup>
+                  <Label>First Name *</Label>
+                  <Input
+                    value={userForm.first_name}
+                    onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
+                    required
+                  />
+                </FormGroup>
+              </Colxx>
                <Colxx xxs="12" md="6">
                  <FormGroup>
                    <Label>Last Name *</Label>
@@ -562,8 +885,10 @@ const UserDashboard = () => {
                    <Label>Email *</Label>
                    <Input
                      type="email"
-                     value={userForm.email}
-                     onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                     value={userForm.email || ''}
+                     onChange={(e) => setUserForm({ ...userForm, email: e.target.value === '' ? null : e.target.value })}
+                     placeholder="Enter email address"
+                     autoComplete="off"
                      required
                    />
                  </FormGroup>
@@ -572,8 +897,32 @@ const UserDashboard = () => {
                  <FormGroup>
                    <Label>Mobile</Label>
                    <Input
-                     value={userForm.mobile}
-                     onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })}
+                     value={userForm.mobile || ''}
+                     onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value === '' ? null : e.target.value })}
+                   />
+                 </FormGroup>
+               </Colxx>
+             </Row>
+             <Row>
+               <Colxx xxs="12" md="6">
+                 <FormGroup>
+                   <Label>Party Name</Label>
+                   <Input
+                     value={userForm.party_name || ''}
+                     onChange={(e) => setUserForm({ ...userForm, party_name: e.target.value })}
+                     placeholder="Enter party name"
+                   />
+                 </FormGroup>
+               </Colxx>
+               <Colxx xxs="12" md="6">
+                 <FormGroup>
+                   <Label>Footer Content (Hindi)</Label>
+                   <Input
+                     type="textarea"
+                     value={userForm.footer_content || ''}
+                     onChange={(e) => setUserForm({ ...userForm, footer_content: e.target.value })}
+                     placeholder="Enter footer content in Hindi"
+                     rows="3"
                    />
                  </FormGroup>
                </Colxx>
@@ -589,8 +938,8 @@ const UserDashboard = () => {
                        <InputGroup>
                          <Input
                            type={showPassword ? 'text' : 'password'}
-                           value={userForm.password}
-                           onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                           value={userForm.password || ''}
+                           onChange={(e) => setUserForm({ ...userForm, password: e.target.value === '' ? null : e.target.value })}
                            required
                          />
                          <InputGroupAddon addonType="append">
@@ -611,8 +960,8 @@ const UserDashboard = () => {
                        <InputGroup>
                          <Input
                            type={showConfirmPassword ? 'text' : 'password'}
-                           value={userForm.confirmPassword}
-                           onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value })}
+                           value={userForm.confirmPassword || ''}
+                           onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value === '' ? null : e.target.value })}
                            required
                          />
                          <InputGroupAddon addonType="append">
@@ -661,6 +1010,47 @@ const UserDashboard = () => {
                </>
              )}
              
+             {/* Party Logo Upload */}
+             <Row>
+               <Colxx xxs="12">
+                 <FormGroup>
+                   <Label>Party Logo</Label>
+                   <div className="d-flex align-items-center">
+                     <Input
+                       type="file"
+                       accept="image/*"
+                       onChange={handleFileSelect}
+                       className="mr-2"
+                     />
+                     {selectedFile && (
+                       <Button
+                         type="button"
+                         color="danger"
+                         size="sm"
+                         onClick={removeFile}
+                       >
+                         <i className="simple-icon-trash mr-1"></i>
+                         Remove
+                       </Button>
+                     )}
+                   </div>
+                   {filePreview && (
+                     <div className="mt-2">
+                       <img 
+                         src={filePreview} 
+                         alt="Party Logo Preview" 
+                         style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
+                         className="border rounded"
+                       />
+                     </div>
+                   )}
+                   <small className="text-muted">
+                     Supported formats: JPEG, PNG, GIF (max 5MB)
+                   </small>
+                 </FormGroup>
+               </Colxx>
+             </Row>
+             
              {/* Password Update for Existing Users */}
              {editingUser && (
                <Row>
@@ -670,8 +1060,8 @@ const UserDashboard = () => {
                      <InputGroup>
                        <Input
                          type={showPassword ? 'text' : 'password'}
-                         value={userForm.password}
-                         onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                         value={userForm.password || ''}
+                         onChange={(e) => setUserForm({ ...userForm, password: e.target.value === '' ? null : e.target.value })}
                          placeholder="Leave blank to keep current password"
                        />
                        <InputGroupAddon addonType="append">
@@ -688,8 +1078,8 @@ const UserDashboard = () => {
                        <InputGroup className="mt-2">
                          <Input
                            type={showConfirmPassword ? 'text' : 'password'}
-                           value={userForm.confirmPassword}
-                           onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value })}
+                           value={userForm.confirmPassword || ''}
+                           onChange={(e) => setUserForm({ ...userForm, confirmPassword: e.target.value === '' ? null : e.target.value })}
                            placeholder="Confirm new password"
                          />
                          <InputGroupAddon addonType="append">
