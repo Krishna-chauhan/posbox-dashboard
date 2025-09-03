@@ -449,7 +449,7 @@ class ApiService {
   }
 
   async generateUserId() {
-    return this.request('/api/admin/users/generate-id');
+    return this.request('/api/admin/users/generate-user-id');
   }
 
   async activateUser(userId) {
@@ -462,6 +462,26 @@ class ApiService {
     return this.request(`/api/admin/users/${userId}/deactivate`, {
       method: 'PATCH',
     });
+  }
+
+  async getUsersByParent(parentId, skip = 0, limit = 100) {
+    const response = await this.request(`/api/admin/users/by-parent/${parentId}?skip=${skip}&limit=${limit}`);
+    console.log('Raw users by parent API response:', response);
+    
+    // Handle the nested data structure from the API
+    if (response && response.data && response.data.users) {
+      console.log('Extracting users from response.data.users');
+      return response.data.users;
+    } else if (response && response.users) {
+      console.log('Extracting users from response.users');
+      return response.users;
+    } else if (Array.isArray(response)) {
+      console.log('Response is already an array');
+      return response;
+    } else {
+      console.log('Unexpected response structure:', response);
+      return [];
+    }
   }
 
   // Voter Status API methods

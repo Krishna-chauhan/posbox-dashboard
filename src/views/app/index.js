@@ -11,6 +11,9 @@ const AdminDashboard = React.lazy(() =>
 const UserDashboard = React.lazy(() =>
   import(/* webpackChunkName: "user-dashboard" */ './user/UserDashboard')
 );
+const ChildUsersPage = React.lazy(() =>
+  import(/* webpackChunkName: "child-users" */ './user/ChildUsersPage')
+);
 const ElectionsPage = React.lazy(() =>
   import(/* webpackChunkName: "elections" */ './elections/ElectionsPage')
 );
@@ -56,6 +59,10 @@ const App = ({ match }) => {
             <Route
               path={`${match.url}/user-dashboard`}
               render={(props) => <UserDashboard {...props} />}
+            />
+            <Route
+              path={`${match.url}/users/:parentId/children`}
+              render={(props) => <ChildUsersPage {...props} />}
             />
             <Route
               path={`${match.url}/elections`}

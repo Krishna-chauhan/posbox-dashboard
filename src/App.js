@@ -18,6 +18,7 @@ import {
 } from './constants/defaultValues';
 import { getDirection } from './helpers/Utils';
 import { ProtectedRoute } from './helpers/authHelper';
+import { getCurrentUser } from './helpers/Utils';
 
 const ViewHome = React.lazy(() =>
   import(/* webpackChunkName: "views" */ './views/home')
@@ -34,6 +35,18 @@ const ViewError = React.lazy(() =>
 const ViewUnauthorized = React.lazy(() =>
   import(/* webpackChunkName: "views-error" */ './views/unauthorized')
 );
+
+// Component to handle root route redirection
+const RootRedirect = () => {
+  const currentUser = getCurrentUser();
+  const isAuthenticated = currentUser && currentUser.id;
+  
+  if (isAuthenticated) {
+    return <Redirect to={`${adminRoot}/admin-dashboard`} />;
+  } else {
+    return <Redirect to="/user/login" />;
+  }
+};
 
 const App = ({ locale }) => {
   const direction = getDirection();
@@ -60,6 +73,11 @@ const App = ({ locale }) => {
           <Suspense fallback={<div className="loading" />}>
             <Router>
               <Switch>
+                <Route
+                  path="/"
+                  exact
+                  component={RootRedirect}
+                />
                 <ProtectedRoute
                   path={adminRoot}
                   component={ViewApp}
@@ -78,12 +96,6 @@ const App = ({ locale }) => {
                   path="/unauthorized"
                   exact
                   render={(props) => <ViewUnauthorized {...props} />}
-                />
-                <ProtectedRoute
-                  path="/"
-                  exact
-                  component={ViewHome}
-                  roles={[UserRole.Admin, UserRole.Editor]}
                 />
                 {/*
                 <Redirect exact from="/" to={adminRoot} />

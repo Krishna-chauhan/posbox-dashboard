@@ -136,6 +136,8 @@ module.exports = {
   'user.dashboard.find-polling-station': 'Find Polling Station',
   'user.dashboard.update-profile': 'Update Profile',
   'user.dashboard.help-support': 'Help & Support',
+  'user.other-users.title': 'Other Users',
+  'user.other-users.list': 'Other Users List',
   'elections.title': 'Elections',
   'elections.list': 'Elections List',
   'polling-stations.title': 'Polling Stations',

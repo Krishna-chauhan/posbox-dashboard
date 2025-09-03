@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useHistory } from 'react-router-dom';
 import { 
   Row, 
   Col, 
@@ -27,6 +28,7 @@ import IntlMessages from 'helpers/IntlMessages';
 import apiService from 'services/api';
 
 const UserDashboard = () => {
+  const history = useHistory();
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,7 @@ const UserDashboard = () => {
     confirmPassword: null,
     mobile: null,
     party_logo: null,
+    profile_pic: null,
     party_name: '',
     footer_content: '',
     is_active: true
@@ -57,6 +60,8 @@ const UserDashboard = () => {
   const [modalError, setModalError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  const [selectedProfilePic, setSelectedProfilePic] = useState(null);
+  const [profilePicPreview, setProfilePicPreview] = useState(null);
 
   useEffect(() => {
     loadUsers();
@@ -97,7 +102,8 @@ const UserDashboard = () => {
           email: 'john.doe@example.com',
           mobile: '+1-555-0123',
           party_name: 'Bharatiya Janata Party',
-          party_logo: 'https://via.placeholder.com/50x50/FF6B6B/FFFFFF?text=BJP',
+          party_logo: 'https://picsum.photos/50/50?random=1',
+          profile_pic: 'https://picsum.photos/50/50?random=11',
           footer_content: 'भारतीय जनता पार्टी - राष्ट्र के लिए समर्पित',
           is_active: true,
           created_at: '2024-01-01T00:00:00Z',
@@ -111,7 +117,8 @@ const UserDashboard = () => {
           email: 'jane.smith@example.com',
           mobile: '+1-555-0456',
           party_name: 'Indian National Congress',
-          party_logo: 'https://via.placeholder.com/50x50/4ECDC4/FFFFFF?text=INC',
+          party_logo: 'https://picsum.photos/50/50?random=2',
+          profile_pic: 'https://picsum.photos/50/50?random=12',
           footer_content: 'भारतीय राष्ट्रीय कांग्रेस - जनता की आवाज',
           is_active: true,
           created_at: '2024-01-02T00:00:00Z',
@@ -125,11 +132,12 @@ const UserDashboard = () => {
           email: 'mike.johnson@example.com',
           mobile: '+1-555-0789',
           party_name: 'Aam Aadmi Party',
-          party_logo: 'https://via.placeholder.com/50x50/45B7D1/FFFFFF?text=AAP',
+          party_logo: 'https://picsum.photos/50/50?random=3',
+          profile_pic: 'https://picsum.photos/50/50?random=13',
           footer_content: 'आम आदमी पार्टी - साफ राजनीति',
           is_active: false,
           created_at: '2024-01-03T00:00:00Z',
-          updated_at: '2024-01-03T00:00:00Z'
+          updated_at: '2024-01-02T00:00:00Z'
         }
       ]);
     } finally {
@@ -154,15 +162,30 @@ const UserDashboard = () => {
 
   const handleAddUser = async () => {
     setEditingUser(null);
+    
+    // Generate user ID first
+    let generatedId = '';
+    try {
+      const response = await apiService.generateUserId();
+      generatedId = response.data?.user_id || response.user_id || response.id || response;
+    } catch (error) {
+      console.error('Failed to generate user ID from API:', error);
+      // Fallback to client-side generation
+      const timestamp = Date.now().toString().slice(-6);
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      generatedId = `USR${timestamp}${random}`;
+    }
+    
     const newForm = {
-      user_id: '',
+      user_id: generatedId,
       first_name: '',
       last_name: '',
-      email: null,
+      email: '',  // Start with empty string, will be converted to null if not filled
       password: null,
       confirmPassword: null,
       mobile: null,
       party_logo: null,
+      profile_pic: null,
       party_name: '',
       footer_content: '',
       is_active: true
@@ -174,10 +197,9 @@ const UserDashboard = () => {
     setModalError('');
     setSelectedFile(null);
     setFilePreview(null);
+    setSelectedProfilePic(null);
+    setProfilePicPreview(null);
     setModalOpen(true);
-    
-    // Generate user ID when opening the modal
-    await generateUserId();
   };
 
   const handleEditUser = (user) => {
@@ -191,6 +213,7 @@ const UserDashboard = () => {
       confirmPassword: null,
       mobile: user.mobile || null,
       party_logo: user.party_logo || null,
+      profile_pic: user.profile_pic || null,
       party_name: user.party_name || '',
       footer_content: user.footer_content || '',
       is_active: user.is_active !== undefined ? user.is_active : true
@@ -201,6 +224,8 @@ const UserDashboard = () => {
     setModalError('');
     setSelectedFile(null);
     setFilePreview(null);
+    setSelectedProfilePic(null);
+    setProfilePicPreview(null);
     setModalOpen(true);
   };
 
@@ -220,8 +245,21 @@ const UserDashboard = () => {
       formData.append('user_id', userForm.user_id?.trim() || '');
       formData.append('first_name', userForm.first_name?.trim() || '');
       formData.append('last_name', userForm.last_name?.trim() || '');
-      formData.append('email', userForm.email?.trim() || '');
-      formData.append('mobile', userForm.mobile?.trim() || '');
+      
+      // Handle email - send empty string if empty
+      if (userForm.email && userForm.email.trim() !== '') {
+        formData.append('email', userForm.email.trim());
+      } else {
+        formData.append('email', '');
+      }
+      
+      // Handle mobile - send empty string if empty
+      if (userForm.mobile && userForm.mobile.trim() !== '') {
+        formData.append('mobile', userForm.mobile.trim());
+      } else {
+        formData.append('mobile', '');
+      }
+      
       formData.append('party_name', userForm.party_name?.trim() || '');
       formData.append('footer_content', userForm.footer_content?.trim() || '');
       formData.append('is_active', userForm.is_active);
@@ -236,23 +274,29 @@ const UserDashboard = () => {
         formData.append('party_logo', userForm.party_logo);
       }
 
+      // Handle file upload for profile pic
+      if (userForm.profile_pic && userForm.profile_pic instanceof File) {
+        formData.append('profile_pic', userForm.profile_pic);
+      }
+
       if (editingUser) {
         // For editing, we'll still use JSON for now (no file upload in edit)
         const userData = {
-          user_id: userForm.user_id?.trim() || null,
-          first_name: userForm.first_name?.trim() || null,
-          last_name: userForm.last_name?.trim() || null,
-          email: userForm.email?.trim() || null,
-          mobile: userForm.mobile?.trim() || null,
-          party_name: userForm.party_name?.trim() || null,
-          footer_content: userForm.footer_content?.trim() || null,
+          user_id: userForm.user_id?.trim() || '',
+          first_name: userForm.first_name?.trim() || '',
+          last_name: userForm.last_name?.trim() || '',
+          email: userForm.email?.trim() || '',
+          mobile: userForm.mobile?.trim() || '',
+          party_name: userForm.party_name?.trim() || '',
+          profile_pic: userForm.profile_pic || '',
+          footer_content: userForm.footer_content?.trim() || '',
           is_active: userForm.is_active
         };
 
-        // Convert empty strings to null for all fields
+        // Convert null/undefined to empty strings
         Object.keys(userData).forEach(key => {
-          if (userData[key] === '' || userData[key] === null || userData[key] === undefined) {
-            userData[key] = null;
+          if (userData[key] === null || userData[key] === undefined) {
+            userData[key] = '';
           }
         });
 
@@ -447,7 +491,7 @@ const UserDashboard = () => {
     try {
       // Try to get user ID from API first
       const response = await apiService.generateUserId();
-      const generatedUserId = response.user_id || response.id;
+      const generatedUserId = response.data?.user_id || response.user_id || response.id || response;
       
       if (generatedUserId) {
         setUserForm({ ...userForm, user_id: generatedUserId });
@@ -504,6 +548,43 @@ const UserDashboard = () => {
     setSelectedFile(null);
     setFilePreview(null);
     setUserForm({ ...userForm, party_logo: null });
+  };
+
+  const handleProfilePicSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        setModalError('Please select a valid image file (JPEG, PNG, or GIF)');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        setModalError('File size must be less than 5MB');
+        return;
+      }
+      
+      setSelectedProfilePic(file);
+      setUserForm({ ...userForm, profile_pic: file });
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setProfilePicPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+      
+      setModalError(''); // Clear any previous errors
+    }
+  };
+
+  const removeProfilePic = () => {
+    setSelectedProfilePic(null);
+    setProfilePicPreview(null);
+    setUserForm({ ...userForm, profile_pic: null });
   };
 
   // Pagination logic
@@ -644,12 +725,14 @@ const UserDashboard = () => {
                                                              <thead>
                       <tr>
                         <th>User ID</th>
-                        <th>Name</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Status</th>
                         <th>Email</th>
                         <th>Mobile</th>
                         <th>Party Logo</th>
+                        <th>Profile Pic</th>
                         <th>Party Name</th>
-                        <th>Status</th>
                         <th>Created At</th>
                         <th>Updated At</th>
                         <th>Actions</th>
@@ -663,45 +746,139 @@ const UserDashboard = () => {
                                <strong>{user.user_id || user.id}</strong>
                              </td>
                              <td>
-                               <strong>{user.first_name} {user.last_name}</strong>
+                               <strong>{user.first_name}</strong>
                              </td>
+                             <td>
+                               <strong>{user.last_name}</strong>
+                             </td>
+                             <td>{getStatusBadge(user.is_active ? 'active' : 'inactive')}</td>
                              <td>{user.email}</td>
                              <td>{user.mobile}</td>
-                             <td>
-                               {user.party_logo ? (
-                                 <img 
-                                   src={user.party_logo} 
-                                   alt="Party Logo" 
-                                   style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }}
-                                   onError={(e) => {
-                                     e.target.style.display = 'none';
-                                     e.target.nextSibling.style.display = 'inline';
-                                   }}
-                                 />
+                                                          <td>
+                               {user.party_logo && user.party_logo.trim() !== '' ? (
+                                 <div style={{ position: 'relative' }}>
+                                   <img 
+                                     src={user.party_logo} 
+                                     alt="Party Logo" 
+                                     style={{ 
+                                       width: '40px', 
+                                       height: '40px', 
+                                       borderRadius: '50%', 
+                                       objectFit: 'cover',
+                                       border: '2px solid #e9ecef'
+                                     }}
+                                     onError={(e) => {
+                                       console.log('Image failed to load:', user.party_logo);
+                                       e.target.style.display = 'none';
+                                       if (e.target.nextSibling) {
+                                         e.target.nextSibling.style.display = 'flex';
+                                       }
+                                     }}
+                                   />
+                                   <div 
+                                     style={{ 
+                                       width: '40px', 
+                                       height: '40px', 
+                                       borderRadius: '50%', 
+                                       backgroundColor: '#f8f9fa', 
+                                       display: 'none',
+                                       alignItems: 'center', 
+                                       justifyContent: 'center',
+                                       fontSize: '10px',
+                                       color: '#6c757d',
+                                       border: '2px solid #e9ecef',
+                                       position: 'absolute',
+                                       top: 0,
+                                       left: 0
+                                     }}
+                                   >
+                                     No Logo
+                                   </div>
+                                 </div>
                                ) : (
                                  <div 
                                    style={{ 
                                      width: '40px', 
-                                     height: '40px', 
-                                     borderRadius: '50%', 
-                                     backgroundColor: '#f8f9fa', 
-                                     display: 'flex', 
-                                     alignItems: 'center', 
-                                     justifyContent: 'center',
-                                     fontSize: '12px',
-                                     color: '#6c757d'
-                                   }}
-                                 >
-                                   No Logo
+                                       height: '40px', 
+                                       borderRadius: '50%', 
+                                       backgroundColor: '#f8f9fa', 
+                                       display: 'flex', 
+                                       alignItems: 'center', 
+                                       justifyContent: 'center',
+                                       fontSize: '10px',
+                                       color: '#6c757d',
+                                       border: '2px solid #e9ecef'
+                                     }}
+                                   >
+                                     No Logo
+                                   </div>
+                                 )}
+                               </td>
+                             <td>
+                               {user.profile_pic && user.profile_pic.trim() !== '' ? (
+                                 <div style={{ position: 'relative' }}>
+                                   <img 
+                                     src={user.profile_pic} 
+                                     alt="Profile Picture" 
+                                     style={{ 
+                                       width: '40px', 
+                                       height: '40px', 
+                                       borderRadius: '50%', 
+                                       objectFit: 'cover',
+                                       border: '2px solid #e9ecef'
+                                     }}
+                                     onError={(e) => {
+                                       console.log('Profile pic failed to load:', user.profile_pic);
+                                       e.target.style.display = 'none';
+                                       if (e.target.nextSibling) {
+                                         e.target.nextSibling.style.display = 'flex';
+                                       }
+                                     }}
+                                   />
+                                   <div 
+                                     style={{ 
+                                       width: '40px', 
+                                       height: '40px', 
+                                       borderRadius: '50%', 
+                                       backgroundColor: '#f8f9fa', 
+                                       display: 'none',
+                                       alignItems: 'center', 
+                                       justifyContent: 'center',
+                                       fontSize: '10px',
+                                       color: '#6c757d',
+                                       border: '2px solid #e9ecef',
+                                       position: 'absolute',
+                                       top: 0,
+                                       left: 0
+                                     }}
+                                   >
+                                     No Pic
+                                   </div>
                                  </div>
-                               )}
-                             </td>
+                               ) : (
+                                 <div 
+                                   style={{ 
+                                     width: '40px', 
+                                       height: '40px', 
+                                       borderRadius: '50%', 
+                                       backgroundColor: '#f8f9fa', 
+                                       display: 'flex', 
+                                       alignItems: 'center', 
+                                       justifyContent: 'center',
+                                       fontSize: '10px',
+                                       color: '#6c757d',
+                                       border: '2px solid #e9ecef'
+                                   }}
+                                   >
+                                     No Pic
+                                   </div>
+                                 )}
+                               </td>
                              <td>
                                <span className="text-primary font-weight-bold">
                                  {user.party_name || 'No Party'}
                                </span>
                              </td>
-                             <td>{getStatusBadge(user.is_active ? 'active' : 'inactive')}</td>
                              <td>
                                <small>{new Date(user.created_at).toLocaleDateString()}</small>
                              </td>
@@ -710,6 +887,16 @@ const UserDashboard = () => {
                              </td>
                              <td>
                                <div className="btn-group" role="group">
+                                                                    <Button
+                                     color="primary"
+                                     size="sm"
+                                     onClick={() => history.push(`/app/users/${user.user_id || user.id}/children`)}
+                                     className="mr-1"
+                                     title="View Other Users"
+                                   >
+                                     <i className="simple-icon-people mr-1"></i>
+                                     View Others
+                                   </Button>
                                  <Button
                                    color={user.is_active ? 'warning' : 'success'}
                                    size="sm"
@@ -739,7 +926,7 @@ const UserDashboard = () => {
                          ))
                                              ) : (
                          <tr>
-                           <td colSpan="10" className="text-center py-4">
+                           <td colSpan="12" className="text-center py-4">
                              {searchTerm ? 'No users found matching your search.' : 'No users available.'}
                            </td>
                          </tr>
@@ -815,8 +1002,8 @@ const UserDashboard = () => {
             </Alert>
           )}
           <Form>
-            <Row>
-              <Colxx xxs="12" md="6">
+                        <Row>
+              <Colxx xxs="12">
                 <FormGroup>
                   <Label>User ID</Label>
                   <InputGroup>
@@ -843,38 +1030,23 @@ const UserDashboard = () => {
                   </small>
                 </FormGroup>
               </Colxx>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Status</Label>
-                  <Input
-                    type="select"
-                    value={userForm.is_active}
-                    onChange={(e) => setUserForm({ ...userForm, is_active: e.target.value === 'true' })}
-                  >
-                    <option value={true}>Active</option>
-                    <option value={false}>Inactive</option>
-                  </Input>
-                </FormGroup>
-              </Colxx>
             </Row>
             <Row>
               <Colxx xxs="12" md="6">
                 <FormGroup>
-                  <Label>First Name *</Label>
+                  <Label>First Name</Label>
                   <Input
                     value={userForm.first_name}
                     onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })}
-                    required
                   />
                 </FormGroup>
               </Colxx>
                <Colxx xxs="12" md="6">
                  <FormGroup>
-                   <Label>Last Name *</Label>
+                   <Label>Last Name</Label>
                    <Input
                      value={userForm.last_name}
                      onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })}
-                     required
                    />
                  </FormGroup>
                </Colxx>
@@ -882,14 +1054,14 @@ const UserDashboard = () => {
              <Row>
                <Colxx xxs="12" md="6">
                  <FormGroup>
-                   <Label>Email *</Label>
+                   <Label>Email</Label>
                    <Input
                      type="email"
                      value={userForm.email || ''}
                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value === '' ? null : e.target.value })}
                      placeholder="Enter email address"
                      autoComplete="off"
-                     required
+                     defaultValue=""
                    />
                  </FormGroup>
                </Colxx>
@@ -906,22 +1078,23 @@ const UserDashboard = () => {
              <Row>
                <Colxx xxs="12" md="6">
                  <FormGroup>
-                   <Label>Party Name</Label>
+                   <Label>Party Name *</Label>
                    <Input
                      value={userForm.party_name || ''}
                      onChange={(e) => setUserForm({ ...userForm, party_name: e.target.value })}
                      placeholder="Enter party name"
+                     required
                    />
                  </FormGroup>
                </Colxx>
                <Colxx xxs="12" md="6">
                  <FormGroup>
-                   <Label>Footer Content (Hindi)</Label>
+                   <Label>Footer Content</Label>
                    <Input
                      type="textarea"
                      value={userForm.footer_content || ''}
                      onChange={(e) => setUserForm({ ...userForm, footer_content: e.target.value })}
-                     placeholder="Enter footer content in Hindi"
+                     placeholder="Enter footer content"
                      rows="3"
                    />
                  </FormGroup>
@@ -1039,6 +1212,47 @@ const UserDashboard = () => {
                        <img 
                          src={filePreview} 
                          alt="Party Logo Preview" 
+                         style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
+                         className="border rounded"
+                       />
+                     </div>
+                   )}
+                   <small className="text-muted">
+                     Supported formats: JPEG, PNG, GIF (max 5MB)
+                   </small>
+                 </FormGroup>
+               </Colxx>
+             </Row>
+             
+             {/* Profile Pic Upload */}
+             <Row>
+               <Colxx xxs="12">
+                 <FormGroup>
+                   <Label>Profile Picture</Label>
+                   <div className="d-flex align-items-center">
+                     <Input
+                       type="file"
+                       accept="image/*"
+                       onChange={handleProfilePicSelect}
+                       className="mr-2"
+                     />
+                     {selectedProfilePic && (
+                       <Button
+                         type="button"
+                         color="danger"
+                         size="sm"
+                         onClick={removeProfilePic}
+                       >
+                         <i className="simple-icon-trash mr-1"></i>
+                         Remove
+                       </Button>
+                     )}
+                   </div>
+                   {profilePicPreview && (
+                     <div className="mt-2">
+                       <img 
+                         src={profilePicPreview} 
+                         alt="Profile Picture Preview" 
                          style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
                          className="border rounded"
                        />
