@@ -790,6 +790,10 @@ class ApiService {
       }),
     });
   }
+
+  async getUserElectionAssignment(userId) {
+    return this.request(`/api/admin/user-elections/user/${userId}`);
+  }
 }
 
 export default new ApiService();

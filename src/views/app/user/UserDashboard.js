@@ -70,6 +70,7 @@ const UserDashboard = () => {
   const [selectedElection, setSelectedElection] = useState('');
   const [selectedRole, setSelectedRole] = useState('observer');
   const [electionLoading, setElectionLoading] = useState(false);
+  const [existingAssignment, setExistingAssignment] = useState(null);
   
   // Default role options
   const roleOptions = [
@@ -391,15 +392,16 @@ const UserDashboard = () => {
         
         try {
           // Try specific activate/deactivate endpoints first
+          const userId = user.user_id || user.id;
           let response;
           if (user.is_active) {
             // Deactivate user
-            response = await apiService.deactivateUser(user.id);
+            response = await apiService.deactivateUser(userId);
             const message = response.message || `User "${userName}" has been deactivated successfully`;
             setMessage({ type: 'success', text: message });
           } else {
             // Activate user
-            response = await apiService.activateUser(user.id);
+            response = await apiService.activateUser(userId);
             const message = response.message || `User "${userName}" has been activated successfully`;
             setMessage({ type: 'success', text: message });
           }
@@ -408,7 +410,8 @@ const UserDashboard = () => {
           
           // Fallback to update method
           const newStatus = !user.is_active;
-          await apiService.updateUser(user.id, { ...user, is_active: newStatus });
+          const userId = user.user_id || user.id;
+          await apiService.updateUser(userId, { ...user, is_active: newStatus });
           setMessage({ type: 'success', text: `User "${userName}" status updated to ${newStatus ? 'active' : 'inactive'}` });
         }
         
@@ -442,11 +445,13 @@ const UserDashboard = () => {
     if (window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
       try {
         setLoading(true);
+        console.log('Deleting user with ID:', userId);
         await apiService.deleteUser(userId);
         setMessage({ type: 'success', text: 'User deleted successfully' });
         loadUsers();
       } catch (error) {
         console.error('Delete user error:', error);
+        console.error('User ID used for deletion:', userId);
         let errorMessage = 'Failed to delete user';
         
         // Try to extract error message from different response formats
@@ -700,16 +705,51 @@ const UserDashboard = () => {
     try {
       setElectionLoading(true);
       setSelectedUser(user);
+      setExistingAssignment(null);
       
       // Load available elections
       const electionsData = await apiService.getElections();
       setElections(electionsData || []);
       
-      // Set current election if user already has one assigned
-      setSelectedElection(user.election_id || '');
-      
-      // Reset role to default
-      setSelectedRole('observer');
+      // Fetch existing user-election assignment
+      try {
+        const assignmentData = await apiService.getUserElectionAssignment(user.user_id || user.id);
+        console.log('Raw assignment API response:', assignmentData);
+        console.log('User ID being used:', user.user_id || user.id);
+        
+        // Handle the actual API response structure
+        let actualAssignment = null;
+        if (assignmentData && assignmentData.data && assignmentData.data.user_elections) {
+          const userElections = assignmentData.data.user_elections;
+          if (userElections.length > 0) {
+            actualAssignment = userElections[0]; // Take the first assignment
+          }
+        }
+        
+        console.log('Processed assignment data:', actualAssignment);
+        
+        if (actualAssignment && actualAssignment.election_id) {
+          setExistingAssignment(actualAssignment);
+          setSelectedElection(actualAssignment.election_id);
+          setSelectedRole(actualAssignment.role || 'observer');
+          console.log('Setting existing assignment:', {
+            election_id: actualAssignment.election_id,
+            role: actualAssignment.role,
+            user_election_id: actualAssignment.user_election_id
+          });
+        } else {
+          // No existing assignment
+          console.log('No existing assignment found, setting defaults');
+          setSelectedElection('');
+          setSelectedRole('observer');
+        }
+      } catch (assignmentError) {
+        console.log('Error fetching assignment:', assignmentError);
+        console.log('Assignment error details:', assignmentError.response?.data || assignmentError.message);
+        // No existing assignment - set defaults
+        setSelectedElection('');
+        setSelectedRole('observer');
+      }
       
       setElectionModalOpen(true);
     } catch (error) {
@@ -745,13 +785,16 @@ const UserDashboard = () => {
       
       setMessage({ 
         type: 'success', 
-        text: `User assigned to election with role: ${selectedRole}` 
+        text: existingAssignment 
+          ? `User election assignment updated successfully with role: ${selectedRole}` 
+          : `User assigned to election with role: ${selectedRole}` 
       });
       
       setElectionModalOpen(false);
       setSelectedUser(null);
       setSelectedElection('');
       setSelectedRole('observer');
+      setExistingAssignment(null);
       
     } catch (error) {
       console.error('Error assigning election:', error);
@@ -766,6 +809,7 @@ const UserDashboard = () => {
     setSelectedUser(null);
     setSelectedElection('');
     setSelectedRole('observer');
+    setExistingAssignment(null);
   };
 
   return (
@@ -1040,7 +1084,7 @@ const UserDashboard = () => {
                                  <Button
                                    color="danger"
                                    size="sm"
-                                   onClick={() => handleDeleteUser(user.id, `${user.first_name} ${user.last_name}`)}
+                                   onClick={() => handleDeleteUser(user.user_id || user.id, `${user.first_name} ${user.last_name}`)}
                                  >
                                    Delete
                                  </Button>
@@ -1523,19 +1567,36 @@ const UserDashboard = () => {
                 </Input>
               </FormGroup>
               
-              <Alert color="info" className="mt-3">
-                <strong>Assignment Info:</strong> This will assign the user to the selected election with the specified role.
-                <div className="mt-2">
-                  <small className="text-muted">
-                    <strong>Available Roles:</strong><br/>
-                    • <strong>Observer:</strong> Can view election data<br/>
-                    • <strong>Supervisor:</strong> Can manage polling stations<br/>
-                    • <strong>Coordinator:</strong> Can coordinate activities<br/>
-                    • <strong>Admin:</strong> Full administrative access<br/>
-                    • <strong>Volunteer:</strong> Basic volunteer tasks
-                  </small>
-                </div>
-              </Alert>
+              {existingAssignment ? (
+                <Alert color="success" className="mt-3">
+                  <strong>Current Assignment:</strong> This user is currently assigned to an election.
+                  <div className="mt-2">
+                    <strong>Assignment ID:</strong> {existingAssignment.user_election_id || 'Unknown'}<br/>
+                    <strong>Election ID:</strong> {existingAssignment.election_id || 'Unknown'}<br/>
+                    <strong>Role:</strong> {existingAssignment.role || 'Unknown Role'}<br/>
+                    <strong>Status:</strong> {existingAssignment.is_active ? 'Active' : 'Inactive'}<br/>
+                    <strong>Assigned Date:</strong> {existingAssignment.created_at ? new Date(existingAssignment.created_at).toLocaleDateString() : 'Unknown'}<br/>
+                    <strong>Last Updated:</strong> {existingAssignment.updated_at ? new Date(existingAssignment.updated_at).toLocaleDateString() : 'Unknown'}
+                  </div>
+                  <div className="mt-2">
+                    <small className="text-muted">Select a different election and/or role to update the assignment.</small>
+                  </div>
+                </Alert>
+              ) : (
+                <Alert color="info" className="mt-3">
+                  <strong>New Assignment:</strong> This user is not currently assigned to any election.
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      <strong>Available Roles:</strong><br/>
+                      • <strong>Observer:</strong> Can view election data<br/>
+                      • <strong>Supervisor:</strong> Can manage polling stations<br/>
+                      • <strong>Coordinator:</strong> Can coordinate activities<br/>
+                      • <strong>Admin:</strong> Full administrative access<br/>
+                      • <strong>Volunteer:</strong> Basic volunteer tasks
+                    </small>
+                  </div>
+                </Alert>
+              )}
             </Form>
           )}
         </ModalBody>
@@ -1548,7 +1609,7 @@ const UserDashboard = () => {
             onClick={handleSaveElectionAssignment} 
             disabled={electionLoading}
           >
-            {electionLoading ? <Spinner size="sm" /> : 'Save Assignment'}
+            {electionLoading ? <Spinner size="sm" /> : (existingAssignment ? 'Update Assignment' : 'Save Assignment')}
           </Button>
         </ModalFooter>
       </Modal>
