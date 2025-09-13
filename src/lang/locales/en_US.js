@@ -98,7 +98,7 @@ module.exports = {
   'menu.icons': 'Icons',
   'menu.input-groups': 'Input Groups',
   'menu.jumbotron': 'Jumbotron',
-  'menu.admin-dashboard': 'Admin Dashboard',
+  'menu.admin-dashboard': 'Dashboard',
   'admin.dashboard.title': 'Admin Dashboard',
   'admin.dashboard.subtitle': 'Manage your election system',
   'admin.authentication': 'Authentication',

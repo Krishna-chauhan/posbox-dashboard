@@ -62,6 +62,24 @@ const UserDashboard = () => {
   const [filePreview, setFilePreview] = useState(null);
   const [selectedProfilePic, setSelectedProfilePic] = useState(null);
   const [profilePicPreview, setProfilePicPreview] = useState(null);
+  
+  // Election assignment modal state
+  const [electionModalOpen, setElectionModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [elections, setElections] = useState([]);
+  const [selectedElection, setSelectedElection] = useState('');
+  const [selectedRole, setSelectedRole] = useState('observer');
+  const [electionLoading, setElectionLoading] = useState(false);
+  const [existingAssignment, setExistingAssignment] = useState(null);
+  
+  // Default role options
+  const roleOptions = [
+    { value: 'observer', label: 'Observer' },
+    { value: 'supervisor', label: 'Supervisor' },
+    { value: 'coordinator', label: 'Coordinator' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'volunteer', label: 'Volunteer' }
+  ];
 
   useEffect(() => {
     loadUsers();
@@ -77,9 +95,11 @@ const UserDashboard = () => {
       setLoading(true);
       const data = await apiService.getUsers();
       
-      // Ensure data is an array
-      if (Array.isArray(data)) {
+      // Handle the new API response structure
+      if (data && Array.isArray(data)) {
         setUsers(data);
+      } else if (data && data.status_code === 200 && Array.isArray(data.data)) {
+        setUsers(data.data);
       } else if (data && Array.isArray(data.data)) {
         setUsers(data.data);
       } else if (data && Array.isArray(data.users)) {
@@ -167,7 +187,19 @@ const UserDashboard = () => {
     let generatedId = '';
     try {
       const response = await apiService.generateUserId();
-      generatedId = response.data?.user_id || response.user_id || response.id || response;
+      
+      // Handle the new API response structure
+      if (response && response.status_code === 200 && response.data) {
+        generatedId = response.data.user_id || response.data.id;
+      } else if (response && response.data && response.data.user_id) {
+        generatedId = response.data.user_id;
+      } else if (response && response.user_id) {
+        generatedId = response.user_id;
+      } else if (response && response.id) {
+        generatedId = response.id;
+      } else {
+        generatedId = response;
+      }
     } catch (error) {
       console.error('Failed to generate user ID from API:', error);
       // Fallback to client-side generation
@@ -313,10 +345,17 @@ const UserDashboard = () => {
         loadUsers();
       } else {
         // For new users, use FormData
-        await apiService.createUserFormData(formData);
-        setMessage({ type: 'success', text: 'User created successfully' });
-        setModalOpen(false);
-        loadUsers();
+        const response = await apiService.createUserFormData(formData);
+        
+        // Handle the new API response structure
+        if (response && response.status_code === 200 || response.status_code === 201) {
+          const successMessage = response.message || 'User created successfully';
+          setMessage({ type: 'success', text: successMessage });
+          setModalOpen(false);
+          loadUsers();
+        } else {
+          throw new Error(response.message || 'Failed to create user');
+        }
       }
     } catch (error) {
       console.error('User save error:', error);
@@ -353,21 +392,26 @@ const UserDashboard = () => {
         
         try {
           // Try specific activate/deactivate endpoints first
+          const userId = user.user_id || user.id;
+          let response;
           if (user.is_active) {
             // Deactivate user
-            await apiService.deactivateUser(user.id);
-            setMessage({ type: 'success', text: `User "${userName}" has been deactivated successfully` });
+            response = await apiService.deactivateUser(userId);
+            const message = response.message || `User "${userName}" has been deactivated successfully`;
+            setMessage({ type: 'success', text: message });
           } else {
             // Activate user
-            await apiService.activateUser(user.id);
-            setMessage({ type: 'success', text: `User "${userName}" has been activated successfully` });
+            response = await apiService.activateUser(userId);
+            const message = response.message || `User "${userName}" has been activated successfully`;
+            setMessage({ type: 'success', text: message });
           }
         } catch (specificError) {
           console.log('Specific activate/deactivate endpoints not available, falling back to update method');
           
           // Fallback to update method
           const newStatus = !user.is_active;
-          await apiService.updateUser(user.id, { ...user, is_active: newStatus });
+          const userId = user.user_id || user.id;
+          await apiService.updateUser(userId, { ...user, is_active: newStatus });
           setMessage({ type: 'success', text: `User "${userName}" status updated to ${newStatus ? 'active' : 'inactive'}` });
         }
         
@@ -401,11 +445,13 @@ const UserDashboard = () => {
     if (window.confirm(`Are you sure you want to delete user "${userName}"? This action cannot be undone.`)) {
       try {
         setLoading(true);
+        console.log('Deleting user with ID:', userId);
         await apiService.deleteUser(userId);
         setMessage({ type: 'success', text: 'User deleted successfully' });
         loadUsers();
       } catch (error) {
         console.error('Delete user error:', error);
+        console.error('User ID used for deletion:', userId);
         let errorMessage = 'Failed to delete user';
         
         // Try to extract error message from different response formats
@@ -652,6 +698,118 @@ const UserDashboard = () => {
       ineligible: 'danger'
     };
     return <Badge color={statusColors[status] || 'secondary'}>{status}</Badge>;
+  };
+
+  // Election assignment functions
+  const handleAssignElection = async (user) => {
+    try {
+      setElectionLoading(true);
+      setSelectedUser(user);
+      setExistingAssignment(null);
+      
+      // Load available elections
+      const electionsData = await apiService.getElections();
+      setElections(electionsData || []);
+      
+      // Fetch existing user-election assignment
+      try {
+        const assignmentData = await apiService.getUserElectionAssignment(user.user_id || user.id);
+        console.log('Raw assignment API response:', assignmentData);
+        console.log('User ID being used:', user.user_id || user.id);
+        
+        // Handle the actual API response structure
+        let actualAssignment = null;
+        if (assignmentData && assignmentData.data && assignmentData.data.user_elections) {
+          const userElections = assignmentData.data.user_elections;
+          if (userElections.length > 0) {
+            actualAssignment = userElections[0]; // Take the first assignment
+          }
+        }
+        
+        console.log('Processed assignment data:', actualAssignment);
+        
+        if (actualAssignment && actualAssignment.election_id) {
+          setExistingAssignment(actualAssignment);
+          setSelectedElection(actualAssignment.election_id);
+          setSelectedRole(actualAssignment.role || 'observer');
+          console.log('Setting existing assignment:', {
+            election_id: actualAssignment.election_id,
+            role: actualAssignment.role,
+            user_election_id: actualAssignment.user_election_id
+          });
+        } else {
+          // No existing assignment
+          console.log('No existing assignment found, setting defaults');
+          setSelectedElection('');
+          setSelectedRole('observer');
+        }
+      } catch (assignmentError) {
+        console.log('Error fetching assignment:', assignmentError);
+        console.log('Assignment error details:', assignmentError.response?.data || assignmentError.message);
+        // No existing assignment - set defaults
+        setSelectedElection('');
+        setSelectedRole('observer');
+      }
+      
+      setElectionModalOpen(true);
+    } catch (error) {
+      console.error('Error loading elections:', error);
+      setMessage({ type: 'danger', text: 'Failed to load elections' });
+    } finally {
+      setElectionLoading(false);
+    }
+  };
+
+  const handleSaveElectionAssignment = async () => {
+    try {
+      if (!selectedUser || !selectedElection) {
+        setMessage({ type: 'warning', text: 'Please select an election and role' });
+        return;
+      }
+      
+      setElectionLoading(true);
+      
+      // Use the new user-election assignment API
+      await apiService.assignUserToElection(
+        selectedUser.user_id || selectedUser.id,
+        selectedElection,
+        selectedRole
+      );
+      
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === selectedUser.id 
+          ? { ...user, election_id: selectedElection, election_role: selectedRole }
+          : user
+      ));
+      
+      setMessage({ 
+        type: 'success', 
+        text: existingAssignment 
+          ? `User election assignment updated successfully with role: ${selectedRole}` 
+          : `User assigned to election with role: ${selectedRole}` 
+      });
+      
+      setElectionModalOpen(false);
+      setSelectedUser(null);
+      setSelectedElection('');
+      setSelectedRole('observer');
+      setExistingAssignment(null);
+      
+    } catch (error) {
+      console.error('Error assigning election:', error);
+      setMessage({ type: 'danger', text: 'Failed to assign election' });
+    } finally {
+      setElectionLoading(false);
+    }
+  };
+
+  const handleCloseElectionModal = () => {
+    setElectionModalOpen(false);
+    setSelectedUser(null);
+    setSelectedElection('');
+    setSelectedRole('observer');
+    setExistingAssignment(null);
   };
 
   return (
@@ -906,6 +1064,16 @@ const UserDashboard = () => {
                                    {user.is_active ? 'Deactivate' : 'Activate'}
                                  </Button>
                                  <Button
+                                   color="success"
+                                   size="sm"
+                                   onClick={() => handleAssignElection(user)}
+                                   className="mr-1"
+                                   title="Assign Election"
+                                 >
+                                   <i className="simple-icon-check mr-1"></i>
+                                   Assign Election
+                                 </Button>
+                                 <Button
                                    color="info"
                                    size="sm"
                                    onClick={() => handleEditUser(user)}
@@ -916,7 +1084,7 @@ const UserDashboard = () => {
                                  <Button
                                    color="danger"
                                    size="sm"
-                                   onClick={() => handleDeleteUser(user.id, `${user.first_name} ${user.last_name}`)}
+                                   onClick={() => handleDeleteUser(user.user_id || user.id, `${user.first_name} ${user.last_name}`)}
                                  >
                                    Delete
                                  </Button>
@@ -1347,6 +1515,101 @@ const UserDashboard = () => {
           </Button>
           <Button color="primary" onClick={handleSaveUser} disabled={loading}>
             {loading ? <Spinner size="sm" /> : (editingUser ? 'Update' : 'Create')}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Election Assignment Modal */}
+      <Modal isOpen={electionModalOpen} toggle={handleCloseElectionModal} size="md">
+        <ModalHeader toggle={handleCloseElectionModal}>
+          Assign Election to {selectedUser ? `${selectedUser.first_name} ${selectedUser.last_name}` : 'User'}
+        </ModalHeader>
+        <ModalBody>
+          {electionLoading ? (
+            <div className="text-center py-4">
+              <Spinner size="lg" />
+              <p className="mt-2">Loading elections...</p>
+            </div>
+          ) : (
+            <Form>
+              <FormGroup>
+                <Label for="electionSelect">Select Election *</Label>
+                <Input
+                  type="select"
+                  id="electionSelect"
+                  value={selectedElection}
+                  onChange={(e) => setSelectedElection(e.target.value)}
+                  required
+                >
+                  <option value="">Select an Election</option>
+                  {elections.map((election) => (
+                    <option key={election.election_id || election.id} value={election.election_id || election.id}>
+                      {election.name} - {election.type} ({new Date(election.election_date).toLocaleDateString()})
+                    </option>
+                  ))}
+                </Input>
+              </FormGroup>
+              
+              <FormGroup>
+                <Label for="roleSelect">Select Role *</Label>
+                <Input
+                  type="select"
+                  id="roleSelect"
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  required
+                >
+                  {roleOptions.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </Input>
+              </FormGroup>
+              
+              {existingAssignment ? (
+                <Alert color="success" className="mt-3">
+                  <strong>Current Assignment:</strong> This user is currently assigned to an election.
+                  <div className="mt-2">
+                    <strong>Assignment ID:</strong> {existingAssignment.user_election_id || 'Unknown'}<br/>
+                    <strong>Election ID:</strong> {existingAssignment.election_id || 'Unknown'}<br/>
+                    <strong>Role:</strong> {existingAssignment.role || 'Unknown Role'}<br/>
+                    <strong>Status:</strong> {existingAssignment.is_active ? 'Active' : 'Inactive'}<br/>
+                    <strong>Assigned Date:</strong> {existingAssignment.created_at ? new Date(existingAssignment.created_at).toLocaleDateString() : 'Unknown'}<br/>
+                    <strong>Last Updated:</strong> {existingAssignment.updated_at ? new Date(existingAssignment.updated_at).toLocaleDateString() : 'Unknown'}
+                  </div>
+                  <div className="mt-2">
+                    <small className="text-muted">Select a different election and/or role to update the assignment.</small>
+                  </div>
+                </Alert>
+              ) : (
+                <Alert color="info" className="mt-3">
+                  <strong>New Assignment:</strong> This user is not currently assigned to any election.
+                  <div className="mt-2">
+                    <small className="text-muted">
+                      <strong>Available Roles:</strong><br/>
+                      • <strong>Observer:</strong> Can view election data<br/>
+                      • <strong>Supervisor:</strong> Can manage polling stations<br/>
+                      • <strong>Coordinator:</strong> Can coordinate activities<br/>
+                      • <strong>Admin:</strong> Full administrative access<br/>
+                      • <strong>Volunteer:</strong> Basic volunteer tasks
+                    </small>
+                  </div>
+                </Alert>
+              )}
+            </Form>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button color="secondary" onClick={handleCloseElectionModal} disabled={electionLoading}>
+            Cancel
+          </Button>
+          <Button 
+            color="primary" 
+            onClick={handleSaveElectionAssignment} 
+            disabled={electionLoading}
+          >
+            {electionLoading ? <Spinner size="sm" /> : (existingAssignment ? 'Update Assignment' : 'Save Assignment')}
           </Button>
         </ModalFooter>
       </Modal>

@@ -114,11 +114,13 @@ const VoterManagement = () => {
       setFilteredVoters(voters);
     } else {
       const filtered = voters.filter(voter => 
-        voter.voter_name_english?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        voter.voter_full_name_hindi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        voter.full_name_english?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        voter.full_name_hindi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         voter.voter_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         voter.booth_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        voter.related_person_english?.toLowerCase().includes(searchTerm.toLowerCase())
+        voter.relation_name_english?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        voter.relation_name_hindi?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        voter.relation_type?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       console.log('Filtered voters count:', filtered.length);
       setFilteredVoters(filtered);
@@ -334,7 +336,7 @@ const VoterManagement = () => {
                       </InputGroupText>
                     </InputGroupAddon>
                     <Input
-                      placeholder="Search voters by name, voter ID, booth number, or related person..."
+                      placeholder="Search voters by name, voter ID, booth number, relation name, or relation type..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -355,10 +357,11 @@ const VoterManagement = () => {
                       <tr>
                         <th>Serial No.</th>
                         <th>Voter ID</th>
-                        <th>Name (English)</th>
-                        <th>Name (Hindi)</th>
-                        <th>Related Person</th>
-                        <th>Relation</th>
+                        <th>Full Name (English)</th>
+                        <th>Full Name (Hindi)</th>
+                        <th>Relation Name (English)</th>
+                        <th>Relation Name (Hindi)</th>
+                        <th>Relation Type</th>
                         <th>Booth No.</th>
                         <th>Age</th>
                         <th>Gender</th>
@@ -369,19 +372,15 @@ const VoterManagement = () => {
                       {currentVoters.length > 0 ? (
                         currentVoters.map((voter) => (
                           <tr key={voter.id}>
-                            <td>{voter.serial_number}</td>
+                            <td>{voter.serial_no}</td>
                             <td>
                               <strong>{voter.voter_id}</strong>
                             </td>
-                            <td>{voter.voter_name_english}</td>
-                            <td>{voter.voter_full_name_hindi}</td>
-                            <td>
-                              <div>
-                                <div>{voter.related_person_english}</div>
-                                <small className="text-muted">{voter.related_person_hindi}</small>
-                              </div>
-                            </td>
-                            <td>{voter.relation}</td>
+                            <td>{voter.full_name_english}</td>
+                            <td>{voter.full_name_hindi}</td>
+                            <td>{voter.relation_name_english}</td>
+                            <td>{voter.relation_name_hindi}</td>
+                            <td>{voter.relation_type}</td>
                             <td>
                               <Badge color="primary">{voter.booth_no}</Badge>
                             </td>
@@ -392,7 +391,7 @@ const VoterManagement = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="10" className="text-center py-4">
+                          <td colSpan="11" className="text-center py-4">
                             {searchTerm ? 'No voters found matching your search.' : 'No voters available for this election.'}
                           </td>
                         </tr>

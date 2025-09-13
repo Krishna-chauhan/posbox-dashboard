@@ -59,9 +59,11 @@ const ChildUsersPage = () => {
       setLoading(true);
       const data = await apiService.getUsersByParent(parentId);
       
-      // Ensure data is an array
-      if (Array.isArray(data)) {
+      // Handle the new API response structure
+      if (data && Array.isArray(data)) {
         setUsers(data);
+      } else if (data && data.status_code === 200 && Array.isArray(data.data)) {
+        setUsers(data.data);
       } else if (data && Array.isArray(data.data)) {
         setUsers(data.data);
       } else if (data && Array.isArray(data.users)) {

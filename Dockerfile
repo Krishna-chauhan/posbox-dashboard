@@ -21,10 +21,13 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV NODE_ENV=production
 RUN npm install --legacy-peer-deps
 
+# Copy .env file
+COPY .env ./
+
 # Copy source code
 COPY . .
 
-# Build the application (disable ESLint for build)
+# Build the application with environment variables (disable ESLint for build)
 RUN DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build
 
 # Stage 2: Production stage
