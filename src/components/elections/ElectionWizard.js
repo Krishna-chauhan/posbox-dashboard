@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   CardBody, 
@@ -50,6 +50,7 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
     election_id: '' // Hidden field to store election ID
   });
   const [stationModalOpen, setStationModalOpen] = useState(false);
+  const [editingStation, setEditingStation] = useState(null);
 
   // Step 3: Statistics
   const [statistics, setStatistics] = useState({});
@@ -62,6 +63,82 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
   const [currentStep, setCurrentStep] = useState('step1');
   const [selectedStationForStats, setSelectedStationForStats] = useState(null);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
+
+  // Fetch polling stations and voter status when editing an existing election
+  useEffect(() => {
+    const fetchElectionData = async () => {
+      if (existingElection && (existingElection.election_id || existingElection.id)) {
+        try {
+          console.log('Fetching election data for:', existingElection);
+          const electionId = existingElection.election_id || existingElection.id;
+          
+          // Fetch polling stations
+          const stations = await apiService.getPollingStationsByElection(electionId);
+          console.log('Fetched polling stations:', stations);
+          
+          let stationsData = [];
+          if (Array.isArray(stations)) {
+            stationsData = stations;
+          } else if (stations && Array.isArray(stations.data)) {
+            stationsData = stations.data;
+          }
+          
+          setPollingStations(stationsData);
+          
+          // Fetch voter status for each polling station
+          const statsData = {};
+          for (const station of stationsData) {
+            try {
+              console.log('Fetching voter status for station:', station.polling_station_id || station.id);
+              const voterStats = await apiService.getStatisticsByPollingStation(station.polling_station_id || station.id);
+              console.log('Fetched voter status for station', station.polling_station_id || station.id, ':', voterStats);
+              
+              if (voterStats && voterStats.data) {
+                statsData[station.polling_station_id || station.id] = {
+                  starting_serial_no: voterStats.data.starting_serial_no || 1,
+                  ending_serial_no: voterStats.data.ending_serial_no || 1,
+                  male: voterStats.data.male || 0,
+                  female: voterStats.data.female || 0,
+                  third_gender: voterStats.data.third_gender || 0,
+                  total: voterStats.data.total || 0
+                };
+              } else if (voterStats) {
+                // Handle direct response structure
+                statsData[station.polling_station_id || station.id] = {
+                  starting_serial_no: voterStats.starting_serial_no || 1,
+                  ending_serial_no: voterStats.ending_serial_no || 1,
+                  male: voterStats.male || 0,
+                  female: voterStats.female || 0,
+                  third_gender: voterStats.third_gender || 0,
+                  total: voterStats.total || 0
+                };
+              }
+            } catch (statsError) {
+              console.log('No voter status found for station', station.polling_station_id || station.id, ':', statsError.message);
+              // Set default values if no voter status exists
+              statsData[station.polling_station_id || station.id] = {
+                starting_serial_no: 1,
+                ending_serial_no: 1,
+                male: 0,
+                female: 0,
+                third_gender: 0,
+                total: 0
+              };
+            }
+          }
+          
+          console.log('Setting statistics data:', statsData);
+          setStatistics(statsData);
+          
+        } catch (error) {
+          console.error('Error fetching election data:', error);
+          setError('Failed to load existing election data');
+        }
+      }
+    };
+
+    fetchElectionData();
+  }, [existingElection]);
 
   const topNavClick = (stepItem, push) => {
     push(stepItem.id);
@@ -429,6 +506,89 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
     }
   };
 
+  const handleEditStation = (station) => {
+    console.log('Edit station clicked:', station);
+    setEditingStation(station);
+    setStationForm({
+      name: station.name || '',
+      address: station.address || '',
+      booth_count: station.booth_count || 1,
+      total_voters: station.total_voters || 0,
+      location: station.location || '',
+      polling_station_number: station.polling_station_number || '',
+      election_id: station.election_id || ''
+    });
+    setStationModalOpen(true);
+  };
+
+  const handleUpdateStation = async () => {
+    if (!stationForm.polling_station_number || !stationForm.name || !stationForm.address) {
+      setError('Please fill in polling station number, station name and address');
+      return;
+    }
+
+    if (!editingStation) {
+      setError('No station selected for editing');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const stationData = {
+        name: stationForm.name,
+        address: stationForm.address,
+        booth_count: parseInt(stationForm.booth_count) || 1,
+        total_voters: parseInt(stationForm.total_voters) || 0,
+        location: stationForm.location,
+        polling_station_number: stationForm.polling_station_number,
+        election_id: editingStation.election_id || electionResponse?.election_id || electionResponse?.id
+      };
+
+      console.log('Updating station with data:', stationData);
+      console.log('Station ID for update:', editingStation.polling_station_id || editingStation.id);
+
+      // Update the station via API
+      const updateResponse = await apiService.updatePollingStation(
+        editingStation.polling_station_id || editingStation.id, 
+        stationData
+      );
+
+      if (updateResponse) {
+        console.log('Station updated successfully:', updateResponse);
+        
+        // Update local state
+        setPollingStations(prev => prev.map(station => 
+          (station.polling_station_id === editingStation.polling_station_id || station.id === editingStation.id)
+            ? { ...station, ...stationData }
+            : station
+        ));
+
+        setMessage({ type: 'success', text: 'Polling station updated successfully!' });
+        setStationModalOpen(false);
+        setEditingStation(null);
+        setStationForm({
+          name: '',
+          address: '',
+          booth_count: 1,
+          total_voters: 0,
+          location: '',
+          polling_station_number: '',
+          election_id: ''
+        });
+      } else {
+        throw new Error(updateResponse?.message || 'Failed to update polling station');
+      }
+      
+    } catch (error) {
+      console.error('Error updating polling station:', error);
+      setError(error.message || 'Failed to update polling station');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddStatisticsForStation = (station) => {
     // Store the selected station for statistics
     setSelectedStationForStats(station);
@@ -467,7 +627,7 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
       }
 
       // Get statistics for this station
-      const stats = getStationStats(selectedStationForStats.id);
+      const stats = getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id);
       if (!stats || (stats.male === 0 && stats.female === 0 && stats.third_gender === 0 && stats.total === 0)) {
         setError('Please add some voter statistics data for this station first');
         setLoading(false);
@@ -594,7 +754,7 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
         setProgress(`Adding statistics for station ${i + 1} of ${pollingStations.length}...`);
         
         // Add statistics for this polling station
-        const stats = getStationStats(station.id);
+        const stats = getStationStats(station.polling_station_id || station.id);
         if (stats && Object.values(stats).some(value => value > 0)) {
           try {
             const statsData = {
@@ -835,12 +995,12 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                   <Table responsive>
                     <thead>
                       <tr>
-                        <th>Station Number</th>
-                        <th>Station Name</th>
+                        <th>Polling Station ID</th>
+                        <th>Number</th>
+                        <th>Name</th>
                         <th>Address</th>
-                        <th>Booths</th>
-                        <th>Total Voters</th>
-                        <th>Location</th>
+                        <th>Special Status</th>
+                        <th>Created At</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -850,15 +1010,27 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                         console.log('Station ID:', station.id);
                         console.log('Station polling_station_id:', station.polling_station_id);
                         return (
-                          <tr key={station.key || station.polling_station_number || station.id}>
-                            <td>{station.polling_station_number}</td>
+                          <tr key={station.key || station.number || station.id}>
+                            <td>
+                              <small className="text-muted">{station.polling_station_id || station.id}</small>
+                            </td>
+                            <td>{station.number}</td>
                             <td>{station.name}</td>
                             <td>{station.address}</td>
-                            <td>{station.booth_count}</td>
-                            <td>{station.total_voters}</td>
-                            <td>{station.location}</td>
+                            <td>{station.special_status}</td>
+                            <td>
+                              <small>{station.created_at ? new Date(station.created_at).toLocaleDateString() : 'N/A'}</small>
+                            </td>
                             <td>
                               <div className="d-flex gap-2">
+                                <Button
+                                  color="info"
+                                  size="sm"
+                                  onClick={() => handleEditStation(station)}
+                                  title="Edit this polling station"
+                                >
+                                  <i className="simple-icon-pencil"></i> Edit
+                                </Button>
                                 <Button
                                   color="success"
                                   size="sm"
@@ -889,9 +1061,33 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                 )}
 
                 {/* Add Station Modal */}
-                <Modal isOpen={stationModalOpen} toggle={() => setStationModalOpen(!stationModalOpen)}>
-                  <ModalHeader toggle={() => setStationModalOpen(!stationModalOpen)}>
-                    Add Polling Station
+                <Modal isOpen={stationModalOpen} toggle={() => {
+                  setStationModalOpen(!stationModalOpen);
+                  setEditingStation(null);
+                  setStationForm({
+                    name: '',
+                    address: '',
+                    booth_count: 1,
+                    total_voters: 0,
+                    location: '',
+                    polling_station_number: '',
+                    election_id: ''
+                  });
+                }}>
+                  <ModalHeader toggle={() => {
+                    setStationModalOpen(!stationModalOpen);
+                    setEditingStation(null);
+                    setStationForm({
+                      name: '',
+                      address: '',
+                      booth_count: 1,
+                      total_voters: 0,
+                      location: '',
+                      polling_station_number: '',
+                      election_id: ''
+                    });
+                  }}>
+                    {editingStation ? 'Edit Polling Station' : 'Add Polling Station'}
                   </ModalHeader>
                   <ModalBody>
                     <Form>
@@ -984,15 +1180,27 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                     </Form>
                   </ModalBody>
                   <ModalFooter>
-                    <Button color="secondary" onClick={() => setStationModalOpen(false)}>
+                    <Button color="secondary" onClick={() => {
+                      setStationModalOpen(false);
+                      setEditingStation(null);
+                      setStationForm({
+                        name: '',
+                        address: '',
+                        booth_count: 1,
+                        total_voters: 0,
+                        location: '',
+                        polling_station_number: '',
+                        election_id: ''
+                      });
+                    }}>
                       Cancel
                     </Button>
                     <Button 
                       color="primary" 
-                      onClick={handleAddStation}
+                      onClick={editingStation ? handleUpdateStation : handleAddStation}
                       disabled={loading}
                     >
-                      {loading ? 'Adding...' : 'Add Station'}
+                      {loading ? (editingStation ? 'Updating...' : 'Adding...') : (editingStation ? 'Update Station' : 'Add Station')}
                     </Button>
                   </ModalFooter>
                 </Modal>
@@ -1008,24 +1216,24 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                         <Row>
                           <Col md="6">
                             <FormGroup>
-                              <Label for={`modal_starting_serial_${selectedStationForStats.id}`}>Starting Serial No</Label>
+                              <Label for={`modal_starting_serial_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}>Starting Serial No</Label>
                               <Input
                                 type="number"
-                                id={`modal_starting_serial_${selectedStationForStats.id}`}
-                                value={getStationStats(selectedStationForStats.id).starting_serial_no || 1}
-                                onChange={(e) => handleStatisticChange(selectedStationForStats.id, 'starting_serial_no', e.target.value)}
+                                id={`modal_starting_serial_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}
+                                value={getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id).starting_serial_no || 1}
+                                onChange={(e) => handleStatisticChange(selectedStationForStats.polling_station_id || selectedStationForStats.id, 'starting_serial_no', e.target.value)}
                                 min="1"
                               />
                             </FormGroup>
                           </Col>
                           <Col md="6">
                             <FormGroup>
-                              <Label for={`modal_ending_serial_${selectedStationForStats.id}`}>Ending Serial No</Label>
+                              <Label for={`modal_ending_serial_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}>Ending Serial No</Label>
                               <Input
                                 type="number"
-                                id={`modal_ending_serial_${selectedStationForStats.id}`}
-                                value={getStationStats(selectedStationForStats.id).ending_serial_no || 1}
-                                onChange={(e) => handleStatisticChange(selectedStationForStats.id, 'ending_serial_no', e.target.value)}
+                                id={`modal_ending_serial_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}
+                                value={getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id).ending_serial_no || 1}
+                                onChange={(e) => handleStatisticChange(selectedStationForStats.polling_station_id || selectedStationForStats.id, 'ending_serial_no', e.target.value)}
                                 min="1"
                               />
                             </FormGroup>
@@ -1034,36 +1242,36 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                         <Row>
                           <Col md="4">
                             <FormGroup>
-                              <Label for={`modal_male_${selectedStationForStats.id}`}>Male</Label>
+                              <Label for={`modal_male_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}>Male</Label>
                               <Input
                                 type="number"
-                                id={`modal_male_${selectedStationForStats.id}`}
-                                value={getStationStats(selectedStationForStats.id).male || 0}
-                                onChange={(e) => handleStatisticChange(selectedStationForStats.id, 'male', e.target.value)}
+                                id={`modal_male_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}
+                                value={getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id).male || 0}
+                                onChange={(e) => handleStatisticChange(selectedStationForStats.polling_station_id || selectedStationForStats.id, 'male', e.target.value)}
                                 min="0"
                               />
                             </FormGroup>
                           </Col>
                           <Col md="4">
                             <FormGroup>
-                              <Label for={`modal_female_${selectedStationForStats.id}`}>Female</Label>
+                              <Label for={`modal_female_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}>Female</Label>
                               <Input
                                 type="number"
-                                id={`modal_female_${selectedStationForStats.id}`}
-                                value={getStationStats(selectedStationForStats.id).female || 0}
-                                onChange={(e) => handleStatisticChange(selectedStationForStats.id, 'female', e.target.value)}
+                                id={`modal_female_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}
+                                value={getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id).female || 0}
+                                onChange={(e) => handleStatisticChange(selectedStationForStats.polling_station_id || selectedStationForStats.id, 'female', e.target.value)}
                                 min="0"
                               />
                             </FormGroup>
                           </Col>
                           <Col md="4">
                             <FormGroup>
-                              <Label for={`modal_third_gender_${selectedStationForStats.id}`}>Third Gender</Label>
+                              <Label for={`modal_third_gender_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}>Third Gender</Label>
                               <Input
                                 type="number"
-                                id={`modal_third_gender_${selectedStationForStats.id}`}
-                                value={getStationStats(selectedStationForStats.id).third_gender || 0}
-                                onChange={(e) => handleStatisticChange(selectedStationForStats.id, 'third_gender', e.target.value)}
+                                id={`modal_third_gender_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}
+                                value={getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id).third_gender || 0}
+                                onChange={(e) => handleStatisticChange(selectedStationForStats.polling_station_id || selectedStationForStats.id, 'third_gender', e.target.value)}
                                 min="0"
                               />
                             </FormGroup>
@@ -1072,12 +1280,12 @@ const ElectionWizard = ({ intl, onComplete, onCancel, existingElection = null })
                         <Row>
                           <Col md="6">
                             <FormGroup>
-                              <Label for={`modal_total_${selectedStationForStats.id}`}>Total</Label>
+                              <Label for={`modal_total_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}>Total</Label>
                               <Input
                                 type="number"
-                                id={`modal_total_${selectedStationForStats.id}`}
-                                value={getStationStats(selectedStationForStats.id).total || 0}
-                                onChange={(e) => handleStatisticChange(selectedStationForStats.id, 'total', e.target.value)}
+                                id={`modal_total_${selectedStationForStats.polling_station_id || selectedStationForStats.id}`}
+                                value={getStationStats(selectedStationForStats.polling_station_id || selectedStationForStats.id).total || 0}
+                                onChange={(e) => handleStatisticChange(selectedStationForStats.polling_station_id || selectedStationForStats.id, 'total', e.target.value)}
                                 min="0"
                               />
                             </FormGroup>

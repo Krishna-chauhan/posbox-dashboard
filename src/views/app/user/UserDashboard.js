@@ -62,6 +62,23 @@ const UserDashboard = () => {
   const [filePreview, setFilePreview] = useState(null);
   const [selectedProfilePic, setSelectedProfilePic] = useState(null);
   const [profilePicPreview, setProfilePicPreview] = useState(null);
+  
+  // Election assignment modal state
+  const [electionModalOpen, setElectionModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [elections, setElections] = useState([]);
+  const [selectedElection, setSelectedElection] = useState('');
+  const [selectedRole, setSelectedRole] = useState('observer');
+  const [electionLoading, setElectionLoading] = useState(false);
+  
+  // Default role options
+  const roleOptions = [
+    { value: 'observer', label: 'Observer' },
+    { value: 'supervisor', label: 'Supervisor' },
+    { value: 'coordinator', label: 'Coordinator' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'volunteer', label: 'Volunteer' }
+  ];
 
   useEffect(() => {
     loadUsers();
@@ -678,6 +695,79 @@ const UserDashboard = () => {
     return <Badge color={statusColors[status] || 'secondary'}>{status}</Badge>;
   };
 
+  // Election assignment functions
+  const handleAssignElection = async (user) => {
+    try {
+      setElectionLoading(true);
+      setSelectedUser(user);
+      
+      // Load available elections
+      const electionsData = await apiService.getElections();
+      setElections(electionsData || []);
+      
+      // Set current election if user already has one assigned
+      setSelectedElection(user.election_id || '');
+      
+      // Reset role to default
+      setSelectedRole('observer');
+      
+      setElectionModalOpen(true);
+    } catch (error) {
+      console.error('Error loading elections:', error);
+      setMessage({ type: 'danger', text: 'Failed to load elections' });
+    } finally {
+      setElectionLoading(false);
+    }
+  };
+
+  const handleSaveElectionAssignment = async () => {
+    try {
+      if (!selectedUser || !selectedElection) {
+        setMessage({ type: 'warning', text: 'Please select an election and role' });
+        return;
+      }
+      
+      setElectionLoading(true);
+      
+      // Use the new user-election assignment API
+      await apiService.assignUserToElection(
+        selectedUser.user_id || selectedUser.id,
+        selectedElection,
+        selectedRole
+      );
+      
+      // Update local state
+      setUsers(users.map(user => 
+        user.id === selectedUser.id 
+          ? { ...user, election_id: selectedElection, election_role: selectedRole }
+          : user
+      ));
+      
+      setMessage({ 
+        type: 'success', 
+        text: `User assigned to election with role: ${selectedRole}` 
+      });
+      
+      setElectionModalOpen(false);
+      setSelectedUser(null);
+      setSelectedElection('');
+      setSelectedRole('observer');
+      
+    } catch (error) {
+      console.error('Error assigning election:', error);
+      setMessage({ type: 'danger', text: 'Failed to assign election' });
+    } finally {
+      setElectionLoading(false);
+    }
+  };
+
+  const handleCloseElectionModal = () => {
+    setElectionModalOpen(false);
+    setSelectedUser(null);
+    setSelectedElection('');
+    setSelectedRole('observer');
+  };
+
   return (
     <div className="user-dashboard">
       <Row>
@@ -928,6 +1018,16 @@ const UserDashboard = () => {
                                    className="mr-1"
                                  >
                                    {user.is_active ? 'Deactivate' : 'Activate'}
+                                 </Button>
+                                 <Button
+                                   color="success"
+                                   size="sm"
+                                   onClick={() => handleAssignElection(user)}
+                                   className="mr-1"
+                                   title="Assign Election"
+                                 >
+                                   <i className="simple-icon-check mr-1"></i>
+                                   Assign Election
                                  </Button>
                                  <Button
                                    color="info"
@@ -1371,6 +1471,84 @@ const UserDashboard = () => {
           </Button>
           <Button color="primary" onClick={handleSaveUser} disabled={loading}>
             {loading ? <Spinner size="sm" /> : (editingUser ? 'Update' : 'Create')}
+          </Button>
+        </ModalFooter>
+      </Modal>
+
+      {/* Election Assignment Modal */}
+      <Modal isOpen={electionModalOpen} toggle={handleCloseElectionModal} size="md">
+        <ModalHeader toggle={handleCloseElectionModal}>
+          Assign Election to {selectedUser ? `${selectedUser.first_name} ${selectedUser.last_name}` : 'User'}
+        </ModalHeader>
+        <ModalBody>
+          {electionLoading ? (
+            <div className="text-center py-4">
+              <Spinner size="lg" />
+              <p className="mt-2">Loading elections...</p>
+            </div>
+          ) : (
+            <Form>
+              <FormGroup>
+                <Label for="electionSelect">Select Election *</Label>
+                <Input
+                  type="select"
+                  id="electionSelect"
+                  value={selectedElection}
+                  onChange={(e) => setSelectedElection(e.target.value)}
+                  required
+                >
+                  <option value="">Select an Election</option>
+                  {elections.map((election) => (
+                    <option key={election.election_id || election.id} value={election.election_id || election.id}>
+                      {election.name} - {election.type} ({new Date(election.election_date).toLocaleDateString()})
+                    </option>
+                  ))}
+                </Input>
+              </FormGroup>
+              
+              <FormGroup>
+                <Label for="roleSelect">Select Role *</Label>
+                <Input
+                  type="select"
+                  id="roleSelect"
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value)}
+                  required
+                >
+                  {roleOptions.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </Input>
+              </FormGroup>
+              
+              <Alert color="info" className="mt-3">
+                <strong>Assignment Info:</strong> This will assign the user to the selected election with the specified role.
+                <div className="mt-2">
+                  <small className="text-muted">
+                    <strong>Available Roles:</strong><br/>
+                    • <strong>Observer:</strong> Can view election data<br/>
+                    • <strong>Supervisor:</strong> Can manage polling stations<br/>
+                    • <strong>Coordinator:</strong> Can coordinate activities<br/>
+                    • <strong>Admin:</strong> Full administrative access<br/>
+                    • <strong>Volunteer:</strong> Basic volunteer tasks
+                  </small>
+                </div>
+              </Alert>
+            </Form>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button color="secondary" onClick={handleCloseElectionModal} disabled={electionLoading}>
+            Cancel
+          </Button>
+          <Button 
+            color="primary" 
+            onClick={handleSaveElectionAssignment} 
+            disabled={electionLoading}
+          >
+            {electionLoading ? <Spinner size="sm" /> : 'Save Assignment'}
           </Button>
         </ModalFooter>
       </Modal>

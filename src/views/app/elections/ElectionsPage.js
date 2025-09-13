@@ -327,7 +327,7 @@ const ElectionsPage = () => {
                         currentElections.map((election) => (
                           <tr key={election.id}>
                             <td>
-                              <small className="text-muted">{election.id}</small>
+                              <small className="text-muted">{election.election_id || election.id}</small>
                             </td>
                             <td>
                               <strong>{election.name}</strong>
@@ -348,7 +348,7 @@ const ElectionsPage = () => {
                                  <Button
                                    color="primary"
                                    size="sm"
-                                   onClick={() => handleViewFullDetails(election.id)}
+                                   onClick={() => handleViewFullDetails(election.election_id || election.id)}
                                    className="mr-1"
                                    title="View full election details with polling stations and statistics"
                                  >
@@ -357,7 +357,7 @@ const ElectionsPage = () => {
                                  <Button
                                    color="success"
                                    size="sm"
-                                   onClick={() => window.location.href = `/app/elections/${election.id}/voters`}
+                                   onClick={() => window.location.href = `/app/elections/${election.election_id || election.id}/voters`}
                                    className="mr-1"
                                  >
                                    Voters

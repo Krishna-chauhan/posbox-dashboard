@@ -309,6 +309,38 @@ class ApiService {
     }
   }
 
+  async getPollingStationsByElection(electionId, skip = 0, limit = 100) {
+    try {
+      console.log('API Service - getPollingStationsByElection called with:', { electionId, skip, limit });
+      const response = await this.request(`/api/admin/polling-stations/?election_id=${electionId}&skip=${skip}&limit=${limit}`);
+      console.log('API Service - getPollingStationsByElection response:', response);
+      
+      // Handle the nested data structure from the API
+      if (response && response.data && response.data.polling_stations) {
+        console.log('API Service - returning polling_stations from data:', response.data.polling_stations);
+        return response.data.polling_stations;
+      }
+      
+      // Handle direct array response
+      if (Array.isArray(response)) {
+        console.log('API Service - returning direct array response:', response);
+        return response;
+      }
+      
+      // Handle response with data array
+      if (response && response.data && Array.isArray(response.data)) {
+        console.log('API Service - returning data array:', response.data);
+        return response.data;
+      }
+      
+      console.log('API Service - returning full response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - getPollingStationsByElection error:', error);
+      throw error;
+    }
+  }
+
   // Voter Management
   async getElectionVoters(electionId, skip = 0, limit = 100) {
     const response = await this.request(`/api/admin/elections/${electionId}/voters?skip=${skip}&limit=${limit}`);
@@ -745,6 +777,18 @@ class ApiService {
 
   async searchPollingStations(query) {
     return this.request(`/api/polling-stations/search?q=${encodeURIComponent(query)}`);
+  }
+
+  // User-Election Assignment API
+  async assignUserToElection(userId, electionId, role) {
+    return this.request('/api/admin/user-elections/assign-single', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        election_id: electionId,
+        role: role
+      }),
+    });
   }
 }
 
