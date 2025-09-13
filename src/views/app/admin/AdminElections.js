@@ -120,10 +120,10 @@ const AdminElections = () => {
     }
   };
 
-  const handleDeleteElection = async (id) => {
+  const handleDeleteElection = async (election_id) => {
     if (window.confirm('Are you sure you want to delete this election?')) {
       try {
-        await apiService.deleteElection(id);
+        await apiService.deleteElection(election_id);
         setMessage({ type: 'success', text: 'Election deleted successfully' });
         loadElections();
       } catch (error) {
@@ -211,7 +211,7 @@ const AdminElections = () => {
                         <Button
                           size="sm"
                           color="danger"
-                          onClick={() => handleDeleteElection(election.id)}
+                          onClick={() => handleDeleteElection(election.election_id)}
                         >
                           Delete
                         </Button>

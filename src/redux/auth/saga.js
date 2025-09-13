@@ -27,7 +27,7 @@ export function* watchLoginUser() {
 
 const loginWithEmailPasswordAsync = async (email, password) => {
   // Use real admin login API
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:7070';
   
   try {
     const response = await fetch(`${API_BASE_URL}/api/admin/auth/login`, {

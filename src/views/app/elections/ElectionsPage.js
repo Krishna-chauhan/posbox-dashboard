@@ -26,6 +26,8 @@ import {
 import { Colxx } from 'components/common/CustomBootstrap';
 import IntlMessages from 'helpers/IntlMessages';
 import apiService from 'services/api';
+import ElectionWizard from 'components/elections/ElectionWizard';
+import ElectionFullDetails from 'components/elections/ElectionFullDetails';
 
 const ElectionsPage = () => {
   const [elections, setElections] = useState([]);
@@ -35,23 +37,14 @@ const ElectionsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingElection, setEditingElection] = useState(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [fullDetailsOpen, setFullDetailsOpen] = useState(false);
+  const [selectedElectionId, setSelectedElectionId] = useState(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [electionsPerPage] = useState(10);
 
-  // 3-Step Add Process State
-  const [currentStep, setCurrentStep] = useState(1);
-  const [electionForm, setElectionForm] = useState({
-    name: '',
-    type: 'Assembly Constituency',
-    reservation_type: 'general',
-    election_date: '',
-    qualifying_date: '',
-    number_of_electors: 1,
-    date_of_publication: '',
-    type_of_revision: ''
-  });
 
   useEffect(() => {
     loadElections();
@@ -119,74 +112,41 @@ const ElectionsPage = () => {
   };
 
   const handleAddElection = () => {
-    setEditingElection(null);
-    setCurrentStep(1);
-    setElectionForm({
-      name: '',
-      type: 'Assembly Constituency',
-      reservation_type: 'general',
-      election_date: '',
-      qualifying_date: '',
-      number_of_electors: 1,
-      date_of_publication: '',
-      type_of_revision: ''
-    });
-    setModalOpen(true);
+    setWizardOpen(true);
   };
 
   const handleEditElection = (election) => {
     setEditingElection(election);
-    setCurrentStep(1);
-    setElectionForm({
-      name: election.name || '',
-      type: election.type || 'Assembly Constituency',
-      reservation_type: election.reservation_type || 'general',
-      election_date: election.election_date || '',
-      qualifying_date: election.qualifying_date || '',
-      number_of_electors: election.number_of_electors || 1,
-      date_of_publication: election.date_of_publication || '',
-      type_of_revision: election.type_of_revision || ''
-    });
-    setModalOpen(true);
+    setWizardOpen(true);
   };
 
-  const handleNextStep = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    }
+  const handleWizardComplete = (response) => {
+    setWizardOpen(false);
+    setEditingElection(null);
+    setMessage({ type: 'success', text: response?.message || (editingElection ? 'Election updated successfully' : 'Election created successfully') });
+    loadElections();
   };
 
-  const handlePreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+  const handleWizardCancel = () => {
+    setWizardOpen(false);
+    setEditingElection(null);
   };
 
-  const handleSaveElection = async () => {
-    try {
-      setLoading(true);
-      
-      if (editingElection) {
-        await apiService.updateElection(editingElection.id, electionForm);
-        setMessage({ type: 'success', text: 'Election updated successfully' });
-      } else {
-        await apiService.createElection(electionForm);
-        setMessage({ type: 'success', text: 'Election created successfully' });
-      }
-      setModalOpen(false);
-      setCurrentStep(1);
-      loadElections();
-    } catch (error) {
-      setMessage({ type: 'danger', text: 'Failed to save election' });
-    } finally {
-      setLoading(false);
-    }
+  const handleViewFullDetails = (electionId) => {
+    setSelectedElectionId(electionId);
+    setFullDetailsOpen(true);
   };
 
-  const handleDeleteElection = async (id) => {
+  const handleCloseFullDetails = () => {
+    setFullDetailsOpen(false);
+    setSelectedElectionId(null);
+  };
+
+
+  const handleDeleteElection = async (election_id) => {
     if (window.confirm('Are you sure you want to delete this election?')) {
       try {
-        await apiService.deleteElection(id);
+        await apiService.deleteElection(election_id);
         setMessage({ type: 'success', text: 'Election deleted successfully' });
         loadElections();
       } catch (error) {
@@ -281,159 +241,6 @@ const ElectionsPage = () => {
     return <Badge color={reservationColors[reservation] || 'secondary'}>{reservation.toUpperCase()}</Badge>;
   };
 
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 1:
-        return (
-          <>
-            <h5 className="mb-3">Step 1: Election Details</h5>
-            <Row>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Election Name *</Label>
-                  <Input
-                    value={electionForm.name}
-                    onChange={(e) => setElectionForm({ ...electionForm, name: e.target.value })}
-                    required
-                  />
-                </FormGroup>
-              </Colxx>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Election Type *</Label>
-                  <Input
-                    type="select"
-                    value={electionForm.type}
-                    onChange={(e) => setElectionForm({ ...electionForm, type: e.target.value })}
-                  >
-                    <option value="Assembly Constituency">Assembly Constituency</option>
-                    <option value="Parliamentary Constituency">Parliamentary Constituency</option>
-                    <option value="Local Body">Local Body</option>
-                  </Input>
-                </FormGroup>
-              </Colxx>
-            </Row>
-            <Row>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Reservation Type *</Label>
-                  <Input
-                    type="select"
-                    value={electionForm.reservation_type}
-                    onChange={(e) => setElectionForm({ ...electionForm, reservation_type: e.target.value })}
-                  >
-                    <option value="general">General</option>
-                    <option value="sc">SC</option>
-                    <option value="st">ST</option>
-                    <option value="obc">OBC</option>
-                  </Input>
-                </FormGroup>
-              </Colxx>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Number of Electors *</Label>
-                  <Input
-                    type="number"
-                    value={electionForm.number_of_electors}
-                    onChange={(e) => setElectionForm({ ...electionForm, number_of_electors: parseInt(e.target.value) || 1 })}
-                    min="1"
-                    required
-                  />
-                </FormGroup>
-              </Colxx>
-            </Row>
-            <Row>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Election Date *</Label>
-                  <Input
-                    type="date"
-                    value={electionForm.election_date}
-                    onChange={(e) => setElectionForm({ ...electionForm, election_date: e.target.value })}
-                    required
-                  />
-                </FormGroup>
-              </Colxx>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Qualifying Date *</Label>
-                  <Input
-                    type="date"
-                    value={electionForm.qualifying_date}
-                    onChange={(e) => setElectionForm({ ...electionForm, qualifying_date: e.target.value })}
-                    required
-                  />
-                </FormGroup>
-              </Colxx>
-            </Row>
-            <Row>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Date of Publication</Label>
-                  <Input
-                    type="date"
-                    value={electionForm.date_of_publication}
-                    onChange={(e) => setElectionForm({ ...electionForm, date_of_publication: e.target.value })}
-                  />
-                </FormGroup>
-              </Colxx>
-              <Colxx xxs="12" md="6">
-                <FormGroup>
-                  <Label>Type of Revision</Label>
-                  <Input
-                    value={electionForm.type_of_revision}
-                    onChange={(e) => setElectionForm({ ...electionForm, type_of_revision: e.target.value })}
-                    placeholder="e.g., Final, Draft, etc."
-                  />
-                </FormGroup>
-              </Colxx>
-            </Row>
-          </>
-        );
-      case 2:
-        return (
-          <>
-            <h5 className="mb-3">Step 2: Polling Stations</h5>
-            <Alert color="info">
-              <i className="simple-icon-info mr-2"></i>
-              Polling stations will be added in the next step. This step is for reviewing election details.
-            </Alert>
-            <div className="border rounded p-3 bg-light">
-              <h6>Election Summary:</h6>
-              <Row>
-                <Colxx xxs="12" md="6">
-                  <p><strong>Name:</strong> {electionForm.name}</p>
-                  <p><strong>Type:</strong> {electionForm.type}</p>
-                  <p><strong>Reservation:</strong> {electionForm.reservation_type.toUpperCase()}</p>
-                </Colxx>
-                <Colxx xxs="12" md="6">
-                  <p><strong>Election Date:</strong> {electionForm.election_date}</p>
-                  <p><strong>Electors:</strong> {electionForm.number_of_electors.toLocaleString()}</p>
-                  <p><strong>Qualifying Date:</strong> {electionForm.qualifying_date}</p>
-                </Colxx>
-              </Row>
-            </div>
-          </>
-        );
-      case 3:
-        return (
-          <>
-            <h5 className="mb-3">Step 3: Final Review</h5>
-            <Alert color="success">
-              <i className="simple-icon-check mr-2"></i>
-              Ready to create election! Polling stations can be added after creation.
-            </Alert>
-            <div className="border rounded p-3 bg-light">
-              <h6>Final Review:</h6>
-              <p>All election details have been entered. Click "Create Election" to save.</p>
-              <p>You can add polling stations after the election is created.</p>
-            </div>
-          </>
-        );
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="elections-page">
@@ -539,6 +346,15 @@ const ElectionsPage = () => {
                                                          <td>
                                <div className="btn-group" role="group">
                                  <Button
+                                   color="primary"
+                                   size="sm"
+                                   onClick={() => handleViewFullDetails(election.id)}
+                                   className="mr-1"
+                                   title="View full election details with polling stations and statistics"
+                                 >
+                                   <i className="simple-icon-eye"></i>
+                                 </Button>
+                                 <Button
                                    color="success"
                                    size="sm"
                                    onClick={() => window.location.href = `/app/elections/${election.id}/voters`}
@@ -557,7 +373,7 @@ const ElectionsPage = () => {
                                  <Button
                                    color="danger"
                                    size="sm"
-                                   onClick={() => handleDeleteElection(election.id)}
+                                   onClick={() => handleDeleteElection(election.election_id)}
                                  >
                                    Delete
                                  </Button>
@@ -631,49 +447,27 @@ const ElectionsPage = () => {
         </Colxx>
       </Row>
 
-      {/* Add/Edit Election Modal */}
-      <Modal isOpen={modalOpen} toggle={() => setModalOpen(false)} size="lg">
-        <ModalHeader toggle={() => setModalOpen(false)}>
-          {editingElection ? 'Edit Election' : 'Add New Election'}
+      {/* Add/Edit Election Wizard Modal */}
+      <Modal isOpen={wizardOpen} toggle={handleWizardCancel} size="xl">
+        <ModalHeader toggle={handleWizardCancel}>
+          {editingElection ? 'Edit Election' : 'Create New Election'}
         </ModalHeader>
         <ModalBody>
-          {/* Progress Bar */}
-          {!editingElection && (
-            <div className="mb-4">
-              <Progress value={(currentStep / 3) * 100} color="primary" />
-              <div className="d-flex justify-content-between mt-2">
-                <small>Step {currentStep} of 3</small>
-                <small>{Math.round((currentStep / 3) * 100)}% Complete</small>
-              </div>
-            </div>
-          )}
-          
-          <Form>
-            {renderStepContent()}
-          </Form>
+          <ElectionWizard 
+            onComplete={handleWizardComplete}
+            onCancel={handleWizardCancel}
+            existingElection={editingElection}
+          />
         </ModalBody>
-        <ModalFooter>
-          <Button color="secondary" onClick={() => setModalOpen(false)}>
-            Cancel
-          </Button>
-          
-          {!editingElection && currentStep > 1 && (
-            <Button color="secondary" onClick={handlePreviousStep}>
-              Previous
-            </Button>
-          )}
-          
-          {!editingElection && currentStep < 3 ? (
-            <Button color="primary" onClick={handleNextStep}>
-              Next
-            </Button>
-          ) : (
-            <Button color="primary" onClick={handleSaveElection} disabled={loading}>
-              {loading ? <Spinner size="sm" /> : (editingElection ? 'Update' : 'Create Election')}
-            </Button>
-          )}
-        </ModalFooter>
       </Modal>
+
+
+      {/* Full Election Details Modal */}
+      <ElectionFullDetails 
+        isOpen={fullDetailsOpen}
+        toggle={handleCloseFullDetails}
+        electionId={selectedElectionId}
+      />
     </div>
   );
 };

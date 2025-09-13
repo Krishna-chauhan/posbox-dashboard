@@ -77,9 +77,11 @@ const UserDashboard = () => {
       setLoading(true);
       const data = await apiService.getUsers();
       
-      // Ensure data is an array
-      if (Array.isArray(data)) {
+      // Handle the new API response structure
+      if (data && Array.isArray(data)) {
         setUsers(data);
+      } else if (data && data.status_code === 200 && Array.isArray(data.data)) {
+        setUsers(data.data);
       } else if (data && Array.isArray(data.data)) {
         setUsers(data.data);
       } else if (data && Array.isArray(data.users)) {
@@ -167,7 +169,19 @@ const UserDashboard = () => {
     let generatedId = '';
     try {
       const response = await apiService.generateUserId();
-      generatedId = response.data?.user_id || response.user_id || response.id || response;
+      
+      // Handle the new API response structure
+      if (response && response.status_code === 200 && response.data) {
+        generatedId = response.data.user_id || response.data.id;
+      } else if (response && response.data && response.data.user_id) {
+        generatedId = response.data.user_id;
+      } else if (response && response.user_id) {
+        generatedId = response.user_id;
+      } else if (response && response.id) {
+        generatedId = response.id;
+      } else {
+        generatedId = response;
+      }
     } catch (error) {
       console.error('Failed to generate user ID from API:', error);
       // Fallback to client-side generation
@@ -313,10 +327,17 @@ const UserDashboard = () => {
         loadUsers();
       } else {
         // For new users, use FormData
-        await apiService.createUserFormData(formData);
-        setMessage({ type: 'success', text: 'User created successfully' });
-        setModalOpen(false);
-        loadUsers();
+        const response = await apiService.createUserFormData(formData);
+        
+        // Handle the new API response structure
+        if (response && response.status_code === 200 || response.status_code === 201) {
+          const successMessage = response.message || 'User created successfully';
+          setMessage({ type: 'success', text: successMessage });
+          setModalOpen(false);
+          loadUsers();
+        } else {
+          throw new Error(response.message || 'Failed to create user');
+        }
       }
     } catch (error) {
       console.error('User save error:', error);
@@ -353,14 +374,17 @@ const UserDashboard = () => {
         
         try {
           // Try specific activate/deactivate endpoints first
+          let response;
           if (user.is_active) {
             // Deactivate user
-            await apiService.deactivateUser(user.id);
-            setMessage({ type: 'success', text: `User "${userName}" has been deactivated successfully` });
+            response = await apiService.deactivateUser(user.id);
+            const message = response.message || `User "${userName}" has been deactivated successfully`;
+            setMessage({ type: 'success', text: message });
           } else {
             // Activate user
-            await apiService.activateUser(user.id);
-            setMessage({ type: 'success', text: `User "${userName}" has been activated successfully` });
+            response = await apiService.activateUser(user.id);
+            const message = response.message || `User "${userName}" has been activated successfully`;
+            setMessage({ type: 'success', text: message });
           }
         } catch (specificError) {
           console.log('Specific activate/deactivate endpoints not available, falling back to update method');

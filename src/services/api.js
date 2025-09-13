@@ -1,6 +1,6 @@
 // API service for FastAPI backend integration
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:7070';
 const PROJECT_NAME = process.env.REACT_APP_PROJECT_NAME || 'POSBOX';
 
 class ApiService {
@@ -252,8 +252,8 @@ class ApiService {
     return response;
   }
 
-  async getElectionById(id) {
-    return this.request(`/api/admin/elections/${id}`);
+  async getElectionById(election_id) {
+    return this.request(`/api/elections/${election_id}/details`);
   }
 
   async createElection(electionData) {
@@ -263,27 +263,50 @@ class ApiService {
     });
   }
 
-  async updateElection(id, electionData) {
-    return this.request(`/api/admin/elections/${id}`, {
+  async updateElection(election_id, electionData) {
+    return this.request(`/api/admin/elections/${election_id}`, {
       method: 'PUT',
       body: JSON.stringify(electionData),
     });
   }
 
-  async deleteElection(id) {
-    return this.request(`/api/admin/elections/${id}`, {
+  async deleteElection(election_id) {
+    return this.request(`/api/admin/elections/${election_id}`, {
       method: 'DELETE',
     });
   }
 
   // Polling Stations Management
   async getPollingStations(skip = 0, limit = 100) {
-    const response = await this.request(`/api/admin/polling-stations/?skip=${skip}&limit=${limit}`);
-    // Handle the nested data structure from the API
-    if (response && response.data && response.data.polling_stations) {
-      return response.data.polling_stations;
+    try {
+      console.log('API Service - getPollingStations called with:', { skip, limit });
+      const response = await this.request(`/api/admin/polling-stations/?skip=${skip}&limit=${limit}`);
+      console.log('API Service - getPollingStations response:', response);
+      
+      // Handle the nested data structure from the API
+      if (response && response.data && response.data.polling_stations) {
+        console.log('API Service - returning polling_stations from data:', response.data.polling_stations);
+        return response.data.polling_stations;
+      }
+      
+      // Handle direct array response
+      if (Array.isArray(response)) {
+        console.log('API Service - returning direct array response:', response);
+        return response;
+      }
+      
+      // Handle response with data array
+      if (response && response.data && Array.isArray(response.data)) {
+        console.log('API Service - returning data array:', response.data);
+        return response.data;
+      }
+      
+      console.log('API Service - returning full response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - getPollingStations error:', error);
+      throw error;
     }
-    return response;
   }
 
   // Voter Management
@@ -346,27 +369,72 @@ class ApiService {
   }
 
   async getPollingStationById(id) {
-    return this.request(`/api/admin/polling-stations/${id}`);
+    try {
+      console.log('API Service - getPollingStationById called with:', id);
+      const response = await this.request(`/api/admin/polling-stations/${id}`);
+      console.log('API Service - getPollingStationById response:', response);
+      
+      // Handle the nested data structure from the API
+      if (response && response.data) {
+        console.log('API Service - returning data from response:', response.data);
+        return response.data;
+      }
+      
+      console.log('API Service - returning full response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - getPollingStationById error:', error);
+      throw error;
+    }
   }
 
   async createPollingStation(stationData) {
-    return this.request('/api/admin/polling-stations', {
-      method: 'POST',
-      body: JSON.stringify(stationData),
-    });
+    try {
+      console.log('API Service - createPollingStation called with:', stationData);
+      console.log('API Service - stationData keys:', Object.keys(stationData));
+      console.log('API Service - stationData JSON:', JSON.stringify(stationData, null, 2));
+      console.log('API Service - Does stationData have id?', 'id' in stationData);
+      console.log('API Service - Does stationData have election_id?', 'election_id' in stationData);
+      
+      const response = await this.request('/api/admin/polling-stations/', {
+        method: 'POST',
+        body: JSON.stringify(stationData),
+      });
+      console.log('API Service - createPollingStation response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - createPollingStation error:', error);
+      throw error;
+    }
   }
 
   async updatePollingStation(id, stationData) {
-    return this.request(`/api/admin/polling-stations/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(stationData),
-    });
+    try {
+      console.log('API Service - updatePollingStation called with:', { id, stationData });
+      const response = await this.request(`/api/admin/polling-stations/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(stationData),
+      });
+      console.log('API Service - updatePollingStation response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - updatePollingStation error:', error);
+      throw error;
+    }
   }
 
   async deletePollingStation(id) {
-    return this.request(`/api/admin/polling-stations/${id}`, {
-      method: 'DELETE',
-    });
+    try {
+      console.log('API Service - deletePollingStation called with:', id);
+      const response = await this.request(`/api/admin/polling-stations/${id}`, {
+        method: 'DELETE',
+      });
+      console.log('API Service - deletePollingStation response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - deletePollingStation error:', error);
+      throw error;
+    }
   }
 
   // Users Management
@@ -374,8 +442,11 @@ class ApiService {
     const response = await this.request(`/api/admin/users/?skip=${skip}&limit=${limit}`);
     console.log('Raw users API response:', response);
     
-    // Handle the nested data structure from the API
-    if (response && response.data && response.data.users) {
+    // Handle the standard API response structure
+    if (response && response.status_code === 200 && response.data) {
+      console.log('Extracting users from response.data');
+      return response.data;
+    } else if (response && response.data && response.data.users) {
       console.log('Extracting users from response.data.users');
       return response.data.users;
     } else if (response && response.users) {
@@ -395,10 +466,18 @@ class ApiService {
   }
 
   async createUser(userData) {
-    return this.request('/api/admin/users/', {
+    const response = await this.request('/api/admin/users/', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+    
+    // Handle the standard API response structure
+    if (response && response.status_code === 200 || response.status_code === 201) {
+      return response;
+    } else {
+      console.log('Create user response:', response);
+      return response;
+    }
   }
 
   async createUserFormData(formData) {
@@ -428,7 +507,13 @@ class ApiService {
       
       const data = await response.json();
       console.log('Create user response data:', data);
-      return data;
+      
+      // Handle the standard API response structure
+      if (data && (data.status_code === 200 || data.status_code === 201)) {
+        return data;
+      } else {
+        return data;
+      }
     } catch (error) {
       console.error('Create user failed:', error);
       throw error;
@@ -449,27 +534,54 @@ class ApiService {
   }
 
   async generateUserId() {
-    return this.request('/api/admin/users/generate-user-id');
+    const response = await this.request('/api/admin/users/generate-user-id');
+    
+    // Handle the standard API response structure
+    if (response && response.status_code === 200 && response.data) {
+      return response;
+    } else {
+      console.log('Generate user ID response:', response);
+      return response;
+    }
   }
 
   async activateUser(userId) {
-    return this.request(`/api/admin/users/${userId}/activate`, {
+    const response = await this.request(`/api/admin/users/${userId}/activate`, {
       method: 'PATCH',
     });
+    
+    // Handle the standard API response structure
+    if (response && response.status_code === 200) {
+      return response;
+    } else {
+      console.log('Activate user response:', response);
+      return response;
+    }
   }
 
   async deactivateUser(userId) {
-    return this.request(`/api/admin/users/${userId}/deactivate`, {
+    const response = await this.request(`/api/admin/users/${userId}/deactivate`, {
       method: 'PATCH',
     });
+    
+    // Handle the standard API response structure
+    if (response && response.status_code === 200) {
+      return response;
+    } else {
+      console.log('Deactivate user response:', response);
+      return response;
+    }
   }
 
   async getUsersByParent(parentId, skip = 0, limit = 100) {
     const response = await this.request(`/api/admin/users/by-parent/${parentId}?skip=${skip}&limit=${limit}`);
     console.log('Raw users by parent API response:', response);
     
-    // Handle the nested data structure from the API
-    if (response && response.data && response.data.users) {
+    // Handle the standard API response structure
+    if (response && response.status_code === 200 && response.data) {
+      console.log('Extracting users from response.data');
+      return response.data;
+    } else if (response && response.data && response.data.users) {
       console.log('Extracting users from response.data.users');
       return response.data.users;
     } else if (response && response.users) {
@@ -536,6 +648,80 @@ class ApiService {
 
   async getElectionStats(electionId) {
     return this.request(`/api/admin/elections/${electionId}/stats`);
+  }
+
+  // Statistics Management
+  async createStatistics(statsData) {
+    try {
+      console.log('API Service - createStatistics called with:', statsData);
+      const response = await this.request('/api/admin/voter-stats/', {
+        method: 'POST',
+        body: JSON.stringify(statsData),
+      });
+      console.log('API Service - createStatistics response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - createStatistics error:', error);
+      throw error;
+    }
+  }
+
+  async updateStatistics(id, statsData) {
+    try {
+      console.log('API Service - updateStatistics called with:', { id, statsData });
+      const response = await this.request(`/api/admin/voter-stats/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(statsData),
+      });
+      console.log('API Service - updateStatistics response:', response);
+      return response;
+    } catch (error) {
+      console.error('API Service - updateStatistics error:', error);
+      throw error;
+    }
+  }
+
+  async getStatisticsByPollingStation(pollingStationId) {
+    try {
+      console.log('API Service - getStatisticsByPollingStation called with:', pollingStationId);
+      const response = await this.request(`/api/admin/voter-stats/polling-station/${pollingStationId}`);
+      console.log('API Service - getStatisticsByPollingStation response:', response);
+      
+      // Handle the nested data structure from the API
+      if (response && response.data) {
+        return response.data;
+      }
+      return response;
+    } catch (error) {
+      console.error('API Service - getStatisticsByPollingStation error:', error);
+      throw error;
+    }
+  }
+
+  async getStatistics(skip = 0, limit = 100) {
+    try {
+      console.log('API Service - getStatistics called with:', { skip, limit });
+      const response = await this.request(`/api/admin/voter-stats/?skip=${skip}&limit=${limit}`);
+      console.log('API Service - getStatistics response:', response);
+      
+      // Handle the nested data structure from the API
+      if (response && response.data && response.data.statistics) {
+        return response.data.statistics;
+      }
+      
+      if (Array.isArray(response)) {
+        return response;
+      }
+      
+      if (response && response.data && Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('API Service - getStatistics error:', error);
+      throw error;
+    }
   }
 
   async getUserProfile() {
