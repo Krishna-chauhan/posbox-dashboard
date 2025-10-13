@@ -362,6 +362,32 @@ class ApiService {
     }
   }
 
+  async getMyAssignedVoters(skip = 0, limit = 100, search = '') {
+    const params = new URLSearchParams({
+      skip: skip.toString(),
+      limit: limit.toString()
+    });
+    
+    if (search) {
+      params.append('search', search);
+    }
+    
+    const response = await this.request(`/api/voters/my-assigned-voters?${params.toString()}`);
+    console.log('My Assigned Voters API response:', response);
+    
+    // Handle the API response structure
+    if (response && response.data) {
+      return response.data;
+    } else if (response && response.voters) {
+      return response.voters;
+    } else if (Array.isArray(response)) {
+      return response;
+    } else {
+      console.log('Unexpected response structure for my assigned voters:', response);
+      return [];
+    }
+  }
+
   async uploadVoterExcel(file, electionId) {
     const formData = new FormData();
     formData.append('file', file);
