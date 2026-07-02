@@ -2,7 +2,7 @@ name: CD - Test Vercel Frontend Deployment (Dev)
 
 on:
   push:
-    branches: [development]
+    branches: [development, dev-krishna]
   workflow_dispatch:
     inputs:
       test_build_only:
@@ -23,6 +23,8 @@ jobs:
       - name: Resolve API base URL
         run: |
           DEFAULT_API_URL="https://krishna.fit"
+          DEFAULT_PROJECT_NAME="POSBOX"
+          DEFAULT_APP_TITLE="POSBOX Dashboard"
           if [ -n "${{ secrets.REACT_APP_API_BASE_URL }}" ]; then
             API_URL="${{ secrets.REACT_APP_API_BASE_URL }}"
             echo "Using REACT_APP_API_BASE_URL from GitHub secret"
@@ -31,6 +33,8 @@ jobs:
             echo "REACT_APP_API_BASE_URL secret not set - using default: $API_URL"
           fi
           echo "REACT_APP_API_BASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "REACT_APP_PROJECT_NAME=$DEFAULT_PROJECT_NAME" >> "$GITHUB_ENV"
+          echo "REACT_APP_APP_TITLE=$DEFAULT_APP_TITLE" >> "$GITHUB_ENV"
           echo "Resolved REACT_APP_API_BASE_URL=$API_URL"
 
       - name: Setup Node.js
@@ -87,7 +91,13 @@ jobs:
       - name: Pull Vercel Environment Information
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          CMD="vercel pull --yes --environment=production --token=$VERCEL_TOKEN"
+          if [ -n "$VERCEL_ORG_ID" ]; then
+            CMD="$CMD --scope=$VERCEL_ORG_ID"
+          fi
+          eval $CMD
 
       - name: Override API URL in Environment File
         run: |
@@ -121,6 +131,9 @@ jobs:
       - name: Build Project Artifacts
         env:
           REACT_APP_API_BASE_URL: ${{ env.REACT_APP_API_BASE_URL }}
+          REACT_APP_PROJECT_NAME: ${{ env.REACT_APP_PROJECT_NAME }}
+          REACT_APP_APP_TITLE: ${{ env.REACT_APP_APP_TITLE }}
+          NODE_OPTIONS: --max-old-space-size=4096
         run: |
           echo "Building with REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
           DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build
@@ -130,9 +143,14 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.test_build_only != true }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
         run: |
           echo "Deploying build/ to Vercel..."
-          DEPLOYMENT_OUTPUT=$(vercel deploy build --prod --token=$VERCEL_TOKEN 2>&1)
+          CMD="vercel deploy build --prod --token=$VERCEL_TOKEN"
+          if [ -n "$VERCEL_ORG_ID" ]; then
+            CMD="$CMD --scope=$VERCEL_ORG_ID"
+          fi
+          DEPLOYMENT_OUTPUT=$(eval $CMD 2>&1)
           DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+\.vercel\.app' | head -1 || echo "")
           if [ -z "$DEPLOYMENT_URL" ]; then
             DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+' | head -1 || echo "Check Vercel dashboard for URL")
