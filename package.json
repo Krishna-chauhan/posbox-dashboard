@@ -16,7 +16,7 @@
     "formik": "^2.2.9",
     "moment": "2.29.1",
     "mousetrap": "^1.6.5",
-    "sass": "^1.69.0",
+    "sass": "1.69.5",
     "prop-types": "^15.7.2",
     "rc-slider": "^9.7.2",
     "rc-switch": "^3.2.2",
