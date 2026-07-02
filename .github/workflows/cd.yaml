@@ -39,10 +39,7 @@ jobs:
           node-version: "20"
 
       - name: Install Vercel CLI
-        run: |
-          rm -rf /opt/hostedtoolcache/node/20.19.6/arm64/lib/node_modules/vercel 2>/dev/null || true
-          rm -rf $(npm root -g)/vercel 2>/dev/null || true
-          npm install --global --force vercel@latest || npm install --global vercel@latest
+        run: npm install --global vercel@41.7.8
 
       - name: Verify Vercel CLI installation
         run: vercel --version
@@ -122,11 +119,10 @@ jobs:
 
       - name: Build Project Artifacts
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          REACT_APP_API_BASE_URL: ${{ env.REACT_APP_API_BASE_URL }}
         run: |
-          export REACT_APP_API_BASE_URL="$REACT_APP_API_BASE_URL"
           echo "Building with REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
-          REACT_APP_API_BASE_URL="$REACT_APP_API_BASE_URL" vercel build --prod --token=$VERCEL_TOKEN
+          DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build
 
       - name: Deploy Project Artifacts to Vercel
         id: vercel-deploy
@@ -134,9 +130,8 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          export REACT_APP_API_BASE_URL="$REACT_APP_API_BASE_URL"
-          echo "Deploying with REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
-          DEPLOYMENT_OUTPUT=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN 2>&1)
+          echo "Deploying build/ to Vercel..."
+          DEPLOYMENT_OUTPUT=$(vercel deploy build --prod --token=$VERCEL_TOKEN 2>&1)
           DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+\.vercel\.app' | head -1 || echo "")
           if [ -z "$DEPLOYMENT_URL" ]; then
             DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+' | head -1 || echo "Check Vercel dashboard for URL")
