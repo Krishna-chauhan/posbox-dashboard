@@ -15,6 +15,10 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend to Vercel (Test)
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - name: Check out code
@@ -50,68 +54,39 @@ jobs:
         run: vercel --version
 
       - name: Validate secrets are set
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
         run: |
-          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+          if [ -z "$VERCEL_TOKEN" ]; then
             echo "VERCEL_TOKEN secret is not set"
             exit 1
           fi
-          echo "Using REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
-          if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
-            echo "VERCEL_PROJECT_ID not set - will attempt link without --project"
-          else
-            echo "VERCEL_PROJECT_ID provided"
+          if [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "VERCEL_PROJECT_ID secret is not set"
+            exit 1
           fi
-          if [ -n "$VERCEL_ORG_ID" ]; then
-            echo "Using Vercel scope: $VERCEL_ORG_ID"
-          else
-            echo "No VERCEL_ORG_ID set - will link using personal account"
+          if [ -n "$VERCEL_ORG_ID" ] && [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "VERCEL_ORG_ID is set but VERCEL_PROJECT_ID is missing"
+            exit 1
           fi
+          echo "VERCEL_ORG_ID=${VERCEL_ORG_ID:0:8}..."
+          echo "VERCEL_PROJECT_ID=${VERCEL_PROJECT_ID:0:8}..."
           echo "Required secrets are configured"
 
       - name: Link Vercel Project
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           rm -rf .vercel
           echo "Linking Vercel project..."
-          CMD="vercel link --yes --token=$VERCEL_TOKEN"
-          if [ -n "$VERCEL_PROJECT_ID" ]; then
-            CMD="$CMD --project=$VERCEL_PROJECT_ID"
-          fi
-          if [ -n "$VERCEL_ORG_ID" ]; then
-            CMD="$CMD --scope=$VERCEL_ORG_ID"
-          fi
-          echo "Running: $CMD"
-          eval $CMD
+          vercel link --yes --token="$VERCEL_TOKEN" --project="$VERCEL_PROJECT_ID" --scope="$VERCEL_ORG_ID"
+          cat .vercel/project.json
 
-      - name: Pull Vercel Environment Information
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - name: Create production env file
         run: |
-          CMD="vercel pull --yes --environment=production --token=$VERCEL_TOKEN"
-          if [ -n "$VERCEL_ORG_ID" ]; then
-            CMD="$CMD --scope=$VERCEL_ORG_ID"
-          fi
-          eval $CMD
-
-      - name: Override API URL in Environment File
-        run: |
-          if [ -f .env.production ]; then
-            sed -i.bak '/^REACT_APP_API_BASE_URL=/d' .env.production
-            rm -f .env.production.bak
-          else
-            touch .env.production
-          fi
-          echo "REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL" > .env.production.tmp
-          cat .env.production >> .env.production.tmp
-          mv .env.production.tmp .env.production
-          echo "Set REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
-          grep REACT_APP_API_BASE_URL .env.production || echo "REACT_APP_API_BASE_URL not found"
+          {
+            echo "REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
+            echo "REACT_APP_PROJECT_NAME=$REACT_APP_PROJECT_NAME"
+            echo "REACT_APP_APP_TITLE=$REACT_APP_APP_TITLE"
+          } > .env.production
+          echo "Created .env.production:"
+          cat .env.production
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -141,16 +116,9 @@ jobs:
       - name: Deploy Project Artifacts to Vercel
         id: vercel-deploy
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.test_build_only != true }}
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
         run: |
           echo "Deploying build/ to Vercel..."
-          CMD="vercel deploy build --prod --token=$VERCEL_TOKEN"
-          if [ -n "$VERCEL_ORG_ID" ]; then
-            CMD="$CMD --scope=$VERCEL_ORG_ID"
-          fi
-          DEPLOYMENT_OUTPUT=$(eval $CMD 2>&1)
+          DEPLOYMENT_OUTPUT=$(vercel deploy build --prod --token="$VERCEL_TOKEN" 2>&1)
           DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+\.vercel\.app' | head -1 || echo "")
           if [ -z "$DEPLOYMENT_URL" ]; then
             DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+' | head -1 || echo "Check Vercel dashboard for URL")
