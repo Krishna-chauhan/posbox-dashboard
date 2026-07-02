@@ -1,5 +1,7 @@
 {
+  "framework": "create-react-app",
   "buildCommand": "DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build",
   "outputDirectory": "build",
+  "installCommand": "npm install --legacy-peer-deps",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
