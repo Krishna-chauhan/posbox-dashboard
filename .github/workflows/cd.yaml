@@ -1,0 +1,156 @@
+name: CD - Test Vercel Frontend Deployment (Dev)
+
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+    inputs:
+      test_build_only:
+        description: "Only build (skip deploy)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy-frontend:
+    name: Deploy Frontend to Vercel (Test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Resolve API base URL
+        run: |
+          DEFAULT_API_URL="https://krishna.fit"
+          if [ -n "${{ secrets.REACT_APP_API_BASE_URL }}" ]; then
+            API_URL="${{ secrets.REACT_APP_API_BASE_URL }}"
+            echo "Using REACT_APP_API_BASE_URL from GitHub secret"
+          else
+            API_URL="$DEFAULT_API_URL"
+            echo "REACT_APP_API_BASE_URL secret not set - using default: $API_URL"
+          fi
+          echo "REACT_APP_API_BASE_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "Resolved REACT_APP_API_BASE_URL=$API_URL"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: |
+          rm -rf /opt/hostedtoolcache/node/20.19.6/arm64/lib/node_modules/vercel 2>/dev/null || true
+          rm -rf $(npm root -g)/vercel 2>/dev/null || true
+          npm install --global --force vercel@latest || npm install --global vercel@latest
+
+      - name: Verify Vercel CLI installation
+        run: vercel --version
+
+      - name: Validate secrets are set
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "VERCEL_TOKEN secret is not set"
+            exit 1
+          fi
+          echo "Using REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
+          if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "VERCEL_PROJECT_ID not set - will attempt link without --project"
+          else
+            echo "VERCEL_PROJECT_ID provided"
+          fi
+          if [ -n "$VERCEL_ORG_ID" ]; then
+            echo "Using Vercel scope: $VERCEL_ORG_ID"
+          else
+            echo "No VERCEL_ORG_ID set - will link using personal account"
+          fi
+          echo "Required secrets are configured"
+
+      - name: Link Vercel Project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          rm -rf .vercel
+          echo "Linking Vercel project..."
+          CMD="vercel link --yes --token=$VERCEL_TOKEN"
+          if [ -n "$VERCEL_PROJECT_ID" ]; then
+            CMD="$CMD --project=$VERCEL_PROJECT_ID"
+          fi
+          if [ -n "$VERCEL_ORG_ID" ]; then
+            CMD="$CMD --scope=$VERCEL_ORG_ID"
+          fi
+          echo "Running: $CMD"
+          eval $CMD
+
+      - name: Pull Vercel Environment Information
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+
+      - name: Override API URL in Environment File
+        run: |
+          if [ -f .env.production ]; then
+            sed -i.bak '/^REACT_APP_API_BASE_URL=/d' .env.production
+            rm -f .env.production.bak
+          else
+            touch .env.production
+          fi
+          echo "REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL" > .env.production.tmp
+          cat .env.production >> .env.production.tmp
+          mv .env.production.tmp .env.production
+          echo "Set REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
+          grep REACT_APP_API_BASE_URL .env.production || echo "REACT_APP_API_BASE_URL not found"
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Verify Environment Configuration Before Build
+        run: |
+          echo "=== Environment Check Before Build ==="
+          echo "REACT_APP_API_BASE_URL from env: ${REACT_APP_API_BASE_URL:-NOT SET}"
+          if [ -f .env.production ]; then
+            echo ".env.production contents:"
+            cat .env.production
+          else
+            echo ".env.production file does not exist"
+          fi
+          echo "======================================"
+
+      - name: Build Project Artifacts
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          export REACT_APP_API_BASE_URL="$REACT_APP_API_BASE_URL"
+          echo "Building with REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
+          REACT_APP_API_BASE_URL="$REACT_APP_API_BASE_URL" vercel build --prod --token=$VERCEL_TOKEN
+
+      - name: Deploy Project Artifacts to Vercel
+        id: vercel-deploy
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.test_build_only != true }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          export REACT_APP_API_BASE_URL="$REACT_APP_API_BASE_URL"
+          echo "Deploying with REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL"
+          DEPLOYMENT_OUTPUT=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN 2>&1)
+          DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+\.vercel\.app' | head -1 || echo "")
+          if [ -z "$DEPLOYMENT_URL" ]; then
+            DEPLOYMENT_URL=$(echo "$DEPLOYMENT_OUTPUT" | grep -oE 'https://[^[:space:]]+' | head -1 || echo "Check Vercel dashboard for URL")
+          fi
+          echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          echo "Frontend deployed to: $DEPLOYMENT_URL"
+          echo "$DEPLOYMENT_OUTPUT"
+
+      - name: Display Deployment URL
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.test_build_only != true }}
+        env:
+          DEPLOYMENT_URL: ${{ steps.vercel-deploy.outputs.deployment_url }}
+        run: echo "Frontend is now live at $DEPLOYMENT_URL"
+
+      - name: Build only complete
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.test_build_only == true }}
+        run: echo "Build completed. Deploy skipped (test_build_only=true)."

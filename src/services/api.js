@@ -362,6 +362,32 @@ class ApiService {
     }
   }
 
+  async getMyAssignedVoters(skip = 0, limit = 100, search = '') {
+    const params = new URLSearchParams({
+      skip: skip.toString(),
+      limit: limit.toString()
+    });
+    
+    if (search) {
+      params.append('search', search);
+    }
+    
+    const response = await this.request(`/api/voters/my-assigned-voters?${params.toString()}`);
+    console.log('My Assigned Voters API response:', response);
+    
+    // Handle the API response structure
+    if (response && response.data) {
+      return response.data;
+    } else if (response && response.voters) {
+      return response.voters;
+    } else if (Array.isArray(response)) {
+      return response;
+    } else {
+      console.log('Unexpected response structure for my assigned voters:', response);
+      return [];
+    }
+  }
+
   async uploadVoterExcel(file, electionId) {
     const formData = new FormData();
     formData.append('file', file);
@@ -557,6 +583,46 @@ class ApiService {
       method: 'PUT',
       body: JSON.stringify(userData),
     });
+  }
+
+  async updateUserFormData(id, formData) {
+    const token = this.getAuthToken();
+    
+    const config = {
+      method: 'PUT',
+      headers: {
+        'accept': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+      body: formData,
+    };
+
+    try {
+      console.log('Updating user with FormData for ID:', id);
+      
+      const response = await fetch(`${this.baseURL}/api/admin/users/${id}`, config);
+      
+      console.log('Update user response status:', response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Update User Error:', errorData);
+        throw new Error(errorData.detail || errorData.message || `Update user failed with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Update user response data:', data);
+      
+      // Handle the standard API response structure
+      if (data && (data.status_code === 200 || data.status_code === 201)) {
+        return data;
+      } else {
+        return data;
+      }
+    } catch (error) {
+      console.error('Update user failed:', error);
+      throw error;
+    }
   }
 
   async deleteUser(id) {
@@ -762,6 +828,14 @@ class ApiService {
 
   async updateUserProfile(profileData) {
     return this.request('/api/user/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  // Update user profile using the auth profile endpoint
+  async updateUserProfileAuth(profileData) {
+    return this.request('/api/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(profileData),
     });

@@ -45,14 +45,15 @@ const UserDashboard = () => {
     first_name: '',
     last_name: '',
     email: null,
-    password: null,
+    password: null, // Initially null
     confirmPassword: null,
     mobile: null,
     party_logo: null,
     profile_pic: null,
     party_name: '',
     footer_content: '',
-    is_active: true
+    is_active: true,
+    emid: null
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -212,15 +213,16 @@ const UserDashboard = () => {
       user_id: generatedId,
       first_name: '',
       last_name: '',
-      email: '',  // Start with empty string, will be converted to null if not filled
-      password: null,
+      email: null,  // Start with null
+      password: null, // Initially null
       confirmPassword: null,
       mobile: null,
       party_logo: null,
       profile_pic: null,
       party_name: '',
       footer_content: '',
-      is_active: true
+      is_active: true,
+      emid: null
     };
     setUserForm(newForm);
     setShowPassword(false);
@@ -240,15 +242,16 @@ const UserDashboard = () => {
       user_id: user.user_id || user.id || '',
       first_name: user.first_name || '',
       last_name: user.last_name || '',
-      email: user.email || null,
-      password: null,
+      email: user.email || null, // Make email null if not found
+      password: null, // Always null for edit mode
       confirmPassword: null,
       mobile: user.mobile || null,
       party_logo: user.party_logo || null,
       profile_pic: user.profile_pic || null,
       party_name: user.party_name || '',
       footer_content: user.footer_content || '',
-      is_active: user.is_active !== undefined ? user.is_active : true
+      is_active: user.is_active !== undefined ? user.is_active : true,
+      emid: user.emid || null // Make emid null if not found
     });
     setShowPassword(false);
     setShowConfirmPassword(false);
@@ -262,13 +265,23 @@ const UserDashboard = () => {
   };
 
   const handleSaveUser = async () => {
+    console.log('=== SAVE USER STARTED ===');
+    console.log('editingUser:', editingUser);
+    console.log('userForm:', userForm);
+    
     // Validate passwords for new users
     if (!editingUser && !validatePasswords()) {
+      return;
+    }
+    
+    // Validate passwords for edit mode if password is provided
+    if (editingUser && userForm.password && !validatePasswords()) {
       return;
     }
 
     try {
       setLoading(true);
+      console.log('Loading set to true');
       
       // Create FormData for file upload
       const formData = new FormData();
@@ -312,34 +325,119 @@ const UserDashboard = () => {
       }
 
       if (editingUser) {
-        // For editing, we'll still use JSON for now (no file upload in edit)
-        const userData = {
-          user_id: userForm.user_id?.trim() || '',
-          first_name: userForm.first_name?.trim() || '',
-          last_name: userForm.last_name?.trim() || '',
-          email: userForm.email?.trim() || '',
-          mobile: userForm.mobile?.trim() || '',
-          party_name: userForm.party_name?.trim() || '',
-          profile_pic: userForm.profile_pic || '',
-          footer_content: userForm.footer_content?.trim() || '',
-          is_active: userForm.is_active
-        };
-
-        // Convert null/undefined to empty strings
-        Object.keys(userData).forEach(key => {
-          if (userData[key] === null || userData[key] === undefined) {
-            userData[key] = '';
-          }
+        // Check if we have file uploads (new files selected)
+        const hasFileUploads = (userForm.party_logo && userForm.party_logo instanceof File) || 
+                              (userForm.profile_pic && userForm.profile_pic instanceof File);
+        
+        console.log('File upload check:', {
+          party_logo: userForm.party_logo,
+          party_logo_isFile: userForm.party_logo instanceof File,
+          profile_pic: userForm.profile_pic,
+          profile_pic_isFile: userForm.profile_pic instanceof File,
+          hasFileUploads
         });
-
-        // Handle password for edit
-        if (userForm.password && userForm.password.trim() !== '') {
-          userData.password = userForm.password.trim();
+        
+        if (hasFileUploads) {
+          // Use FormData for file uploads in edit mode
+          console.log('Using FormData for edit with file uploads');
+          
+          // Add user data to FormData
+          formData.append('user_id', userForm.user_id?.trim() || '');
+          formData.append('first_name', userForm.first_name?.trim() || '');
+          formData.append('last_name', userForm.last_name?.trim() || '');
+          
+          // Handle email - send null if empty
+          if (userForm.email && userForm.email.trim() !== '') {
+            formData.append('email', userForm.email.trim());
+          } else {
+            formData.append('email', '');
+          }
+          
+          // Handle mobile - send null if empty
+          if (userForm.mobile && userForm.mobile.trim() !== '') {
+            formData.append('mobile', userForm.mobile.trim());
+          } else {
+            formData.append('mobile', '');
+          }
+          
+          formData.append('party_name', userForm.party_name?.trim() || '');
+          formData.append('footer_content', userForm.footer_content?.trim() || '');
+          formData.append('is_active', userForm.is_active);
+          
+          // Handle password - only add if provided
+          if (userForm.password && userForm.password.trim() !== '') {
+            formData.append('password', userForm.password.trim());
+          }
+          
+          // Handle file upload for party logo
+          if (userForm.party_logo && userForm.party_logo instanceof File) {
+            formData.append('party_logo', userForm.party_logo);
+          }
+          
+          // Handle file upload for profile pic
+          if (userForm.profile_pic && userForm.profile_pic instanceof File) {
+            formData.append('profile_pic', userForm.profile_pic);
+          }
+          
+          // Use FormData for file uploads
+          try {
+            console.log('Calling updateUserFormData with:', editingUser.user_id, formData);
+            const result = await apiService.updateUserFormData(editingUser.user_id, formData);
+            console.log('updateUserFormData result:', result);
+          } catch (error) {
+            console.error('Admin user update with FormData failed:', error);
+            throw error;
+          }
         } else {
-          userData.password = null;
-        }
+          // Use JSON for non-file updates
+          console.log('Using JSON for edit without file uploads');
+          const userData = {
+            user_id: userForm.user_id?.trim() || '',
+            first_name: userForm.first_name?.trim() || '',
+            last_name: userForm.last_name?.trim() || '',
+            email: userForm.email?.trim() || null, // Send null instead of empty string for email
+            mobile: userForm.mobile?.trim() || null, // Send null instead of empty string for mobile
+            party_name: userForm.party_name?.trim() || '',
+            party_logo: userForm.party_logo || '',
+            profile_pic: userForm.profile_pic || '',
+            footer_content: userForm.footer_content?.trim() || '',
+            is_active: userForm.is_active,
+            emid: userForm.emid || null // Make emid null if not found
+          };
 
-        await apiService.updateUser(editingUser.id, userData);
+          // Convert null/undefined to appropriate values
+          Object.keys(userData).forEach(key => {
+            if (userData[key] === null || userData[key] === undefined) {
+              if (key === 'emid' || key === 'password' || key === 'email' || key === 'mobile') {
+                userData[key] = null;
+              } else {
+                userData[key] = '';
+              }
+            }
+          });
+
+          // Handle password for edit - only include if provided
+          if (userForm.password && userForm.password.trim() !== '') {
+            userData.password = userForm.password.trim();
+          }
+          // Don't include password field if it's null or empty
+
+          // Use PUT /api/admin/users/{user_id} for editing users
+          // Use user_id instead of id for the API endpoint
+          try {
+            console.log('Calling updateUser with:', editingUser.user_id, userData);
+            const result = await apiService.updateUser(editingUser.user_id, userData);
+            console.log('updateUser result:', result);
+          } catch (error) {
+            console.error('Admin user update failed:', error);
+            // If admin endpoint fails, fall back to profile endpoint
+            if (error.message.includes('Method Not Allowed') || error.message.includes('404')) {
+              throw new Error('Admin user update endpoint not available. Please contact administrator to enable user profile updates.');
+            }
+            throw error;
+          }
+        }
+        
         setMessage({ type: 'success', text: 'User updated successfully' });
         setModalOpen(false);
         loadUsers();
@@ -560,33 +658,45 @@ const UserDashboard = () => {
   };
 
   const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      // Validate file type
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-      if (!allowedTypes.includes(file.type)) {
-        setModalError('Please select a valid image file (JPEG, PNG, or GIF)');
-        return;
+    try {
+      const file = event.target.files[0];
+      if (file) {
+        console.log('Party logo file selected:', file.name, file.type, file.size);
+        
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          setModalError('Please select a valid image file (JPEG, PNG, or GIF)');
+          return;
+        }
+        
+        // Validate file size (max 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (file.size > maxSize) {
+          setModalError('File size must be less than 5MB');
+          return;
+        }
+        
+        setSelectedFile(file);
+        setUserForm({ ...userForm, party_logo: file });
+        
+        // Create preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          console.log('Party logo preview loaded successfully');
+          setFilePreview(e.target.result);
+        };
+        reader.onerror = (error) => {
+          console.error('Error reading party logo file:', error);
+          setModalError('Error reading the selected file. Please try again.');
+        };
+        reader.readAsDataURL(file);
+        
+        setModalError(''); // Clear any previous errors
       }
-      
-      // Validate file size (max 5MB)
-      const maxSize = 5 * 1024 * 1024; // 5MB
-      if (file.size > maxSize) {
-        setModalError('File size must be less than 5MB');
-        return;
-      }
-      
-      setSelectedFile(file);
-      setUserForm({ ...userForm, party_logo: file });
-      
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFilePreview(e.target.result);
-      };
-      reader.readAsDataURL(file);
-      
-      setModalError(''); // Clear any previous errors
+    } catch (error) {
+      console.error('Error in handleFileSelect:', error);
+      setModalError('An error occurred while selecting the file. Please try again.');
     }
   };
 
@@ -597,11 +707,23 @@ const UserDashboard = () => {
   };
 
   const handleProfilePicSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
+    console.log('=== PROFILE PIC SELECT STARTED ===');
+    console.log('handleProfilePicSelect called');
+    try {
+      const file = event.target.files[0];
+      console.log('File selected:', file);
+
+      if (!file) {
+        console.log('No file selected');
+        return;
+      }
+
+      console.log('Profile pic file selected:', file.name, file.type, file.size);
+      
       // Validate file type
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
       if (!allowedTypes.includes(file.type)) {
+        console.log('Invalid file type:', file.type);
         setModalError('Please select a valid image file (JPEG, PNG, or GIF)');
         return;
       }
@@ -609,21 +731,45 @@ const UserDashboard = () => {
       // Validate file size (max 5MB)
       const maxSize = 5 * 1024 * 1024; // 5MB
       if (file.size > maxSize) {
+        console.log('File too large:', file.size);
         setModalError('File size must be less than 5MB');
         return;
       }
       
+      console.log('Setting selected profile pic...');
       setSelectedProfilePic(file);
-      setUserForm({ ...userForm, profile_pic: file });
       
+          console.log('Updating user form...');
+          setUserForm(prevForm => {
+            console.log('Previous form:', prevForm);
+            const newForm = { ...prevForm, profile_pic: file };
+            console.log('New form with profile_pic file:', newForm);
+            console.log('profile_pic is File?', newForm.profile_pic instanceof File);
+            return newForm;
+          });
+      
+      console.log('Creating FileReader...');
       // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
+        console.log('Profile pic preview loaded successfully');
         setProfilePicPreview(e.target.result);
       };
+      reader.onerror = (error) => {
+        console.error('Error reading profile pic file:', error);
+        setModalError('Error reading the selected file. Please try again.');
+      };
+      
+      console.log('Reading file as data URL...');
       reader.readAsDataURL(file);
       
+      console.log('Clearing modal error...');
       setModalError(''); // Clear any previous errors
+      console.log('handleProfilePicSelect completed successfully');
+      
+    } catch (error) {
+      console.error('Error in handleProfilePicSelect:', error);
+      setModalError('An error occurred while selecting the file. Please try again.');
     }
   };
 
@@ -1229,7 +1375,6 @@ const UserDashboard = () => {
                      onChange={(e) => setUserForm({ ...userForm, email: e.target.value === '' ? null : e.target.value })}
                      placeholder="Enter email address"
                      autoComplete="off"
-                     defaultValue=""
                    />
                  </FormGroup>
                </Colxx>
@@ -1374,6 +1519,17 @@ const UserDashboard = () => {
                          Remove
                        </Button>
                      )}
+                     {editingUser && userForm.party_logo && typeof userForm.party_logo === 'string' && userForm.party_logo.trim() !== '' && !selectedFile && (
+                       <Button
+                         type="button"
+                         color="warning"
+                         size="sm"
+                         onClick={removeFile}
+                       >
+                         <i className="simple-icon-trash mr-1"></i>
+                         Remove Current
+                       </Button>
+                     )}
                    </div>
                    {filePreview && (
                      <div className="mt-2">
@@ -1382,7 +1538,34 @@ const UserDashboard = () => {
                          alt="Party Logo Preview" 
                          style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
                          className="border rounded"
+                         onError={(e) => {
+                           console.log('Party logo failed to load:', filePreview);
+                           e.target.style.display = 'none';
+                         }}
+                         onLoad={() => {
+                           console.log('Party logo loaded successfully');
+                         }}
                        />
+                     </div>
+                   )}
+                   {editingUser && userForm.party_logo && typeof userForm.party_logo === 'string' && userForm.party_logo.trim() !== '' && !filePreview && (
+                     <div className="mt-2">
+                       <img 
+                         src={userForm.party_logo} 
+                         alt="Current Party Logo" 
+                         style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
+                         className="border rounded"
+                         onError={(e) => {
+                           console.log('Current party logo failed to load:', userForm.party_logo);
+                           e.target.style.display = 'none';
+                         }}
+                         onLoad={() => {
+                           console.log('Current party logo loaded successfully');
+                         }}
+                       />
+                       <div className="mt-1">
+                         <small className="text-muted">Current party logo</small>
+                       </div>
                      </div>
                    )}
                    <small className="text-muted">
@@ -1415,6 +1598,17 @@ const UserDashboard = () => {
                          Remove
                        </Button>
                      )}
+                     {editingUser && userForm.profile_pic && typeof userForm.profile_pic === 'string' && userForm.profile_pic.trim() !== '' && !selectedProfilePic && (
+                       <Button
+                         type="button"
+                         color="warning"
+                         size="sm"
+                         onClick={removeProfilePic}
+                       >
+                         <i className="simple-icon-trash mr-1"></i>
+                         Remove Current
+                       </Button>
+                     )}
                    </div>
                    {profilePicPreview && (
                      <div className="mt-2">
@@ -1423,7 +1617,34 @@ const UserDashboard = () => {
                          alt="Profile Picture Preview" 
                          style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
                          className="border rounded"
+                         onError={(e) => {
+                           console.log('Profile pic failed to load:', profilePicPreview);
+                           e.target.style.display = 'none';
+                         }}
+                         onLoad={() => {
+                           console.log('Profile pic loaded successfully');
+                         }}
                        />
+                     </div>
+                   )}
+                   {editingUser && userForm.profile_pic && typeof userForm.profile_pic === 'string' && userForm.profile_pic.trim() !== '' && !profilePicPreview && (
+                     <div className="mt-2">
+                       <img 
+                         src={userForm.profile_pic} 
+                         alt="Current Profile Picture" 
+                         style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }}
+                         className="border rounded"
+                         onError={(e) => {
+                           console.log('Current profile pic failed to load:', userForm.profile_pic);
+                           e.target.style.display = 'none';
+                         }}
+                         onLoad={() => {
+                           console.log('Current profile pic loaded successfully');
+                         }}
+                       />
+                       <div className="mt-1">
+                         <small className="text-muted">Current profile picture</small>
+                       </div>
                      </div>
                    )}
                    <small className="text-muted">

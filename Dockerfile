@@ -1,17 +1,19 @@
 # Multi-stage build for React Dashboard
-# Stage 1: Build stage
-FROM node:16-bullseye AS build
+# Stage 1: Build stage (alpine = much smaller, faster pull)
+FROM node:16-alpine AS build
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# No native build tools needed (sass is pure JS)
 
 # Set working directory
 WORKDIR /app
+
+# Build args - passed from docker-compose, read from .env
+ARG REACT_APP_API_BASE_URL
+ARG REACT_APP_PROJECT_NAME
+ARG REACT_APP_APP_TITLE
+ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+ENV REACT_APP_PROJECT_NAME=$REACT_APP_PROJECT_NAME
+ENV REACT_APP_APP_TITLE=$REACT_APP_APP_TITLE
 
 # Copy package files
 COPY package*.json ./
