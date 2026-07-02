@@ -17,7 +17,7 @@ case "$1" in
         ;;
     "restart")
         echo "Restarting dashboard application..."
-        docker-compose restart
+        docker compose restart dashboard
         ;;
     "logs")
         echo "Showing dashboard logs..."

@@ -1,0 +1,5 @@
+{
+  "buildCommand": "DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false npm run build",
+  "outputDirectory": "build",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
